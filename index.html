@@ -135,7 +135,10 @@
   fWebhook.value = settings.webhook;
   fAutosync.checked = !!settings.autosync;
   const persistSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  fWebhook.addEventListener("change", () => { settings.webhook = fWebhook.value.trim(); persistSettings(); });
+  const saveWebhook = () => { settings.webhook = fWebhook.value.trim(); persistSettings(); };
+  fWebhook.addEventListener("input", saveWebhook);
+  fWebhook.addEventListener("change", saveWebhook);
+  fWebhook.addEventListener("blur", saveWebhook);
   fAutosync.addEventListener("change", () => { settings.autosync = fAutosync.checked; persistSettings(); });
   document.getElementById("btn-help").addEventListener("click", () => {
     const h = document.getElementById("help");
@@ -285,7 +288,8 @@
   btnOcr.addEventListener("click", scanOcr);
 
   async function pushToOneDrive(record) {
-    if (!settings.webhook) throw new Error("No Flow URL configured");
+    const url = (fWebhook.value || settings.webhook || "").trim();
+    if (!url) throw new Error("No Flow URL configured");
     const payload = {
       timestamp: record.ts,
       device_name: record.name,
@@ -293,12 +297,12 @@
       model: record.model,
       serial: record.serial,
     };
-    const res = await fetch(settings.webhook, {
+    await fetch(url, {
       method: "POST",
+      mode: "no-cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
   }
 
   btnSave.addEventListener("click", async () => {
@@ -337,13 +341,15 @@
   });
 
   document.getElementById("btn-test").addEventListener("click", async () => {
-    if (!settings.webhook) { showToast("Set the Flow URL first"); return; }
-    setStatus("Testing connection…");
+    saveWebhook();
+    if (!settings.webhook) { showToast("Set the Flow URL first"); setStatus("No Flow URL — paste it above first."); return; }
+    setStatus("Sending test row… (check Excel in ~10s)");
+    showToast("Sending test…");
     try {
       await pushToOneDrive({ ts: new Date().toISOString(), name: "TEST", manufacturer: "TEST", model: "TEST", serial: "TEST-" + Date.now() });
-      setStatus("Test row sent. Check your Excel file.");
-      showToast("Test OK");
-    } catch (e) { setStatus("Test failed: " + e.message); }
+      setStatus("Test sent. Open Laptops.xlsx in OneDrive — a TEST row should appear within ~10s. If not, check the flow's run history in Power Automate.");
+      showToast("Test sent");
+    } catch (e) { setStatus("Test failed: " + (e.message || e)); }
   });
 
   btnClear.addEventListener("click", () => Object.values(fields).forEach(f => f.value = ""));
