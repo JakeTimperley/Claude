@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>Laptop Scanner</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #0b0d10; color: #e7ecf2; font: 16px/1.4 -apple-system, system-ui, sans-serif; }
+  header { padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top)); background: #11151a; border-bottom: 1px solid #1f262e; position: sticky; top: 0; z-index: 10; }
+  h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  main { padding: 12px 16px 120px; max-width: 720px; margin: 0 auto; }
+  .stage { position: relative; aspect-ratio: 3/4; background: #000; border-radius: 14px; overflow: hidden; }
+  video, canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+  canvas.overlay { position: absolute; inset: 0; pointer-events: none; }
+  .reticle { position: absolute; inset: 12% 8%; border: 2px dashed rgba(255,255,255,.55); border-radius: 10px; pointer-events: none; }
+  .reticle::after { content: "Aim at the service-tag sticker"; position: absolute; left: 0; right: 0; bottom: -26px; text-align: center; font-size: 12px; color: rgba(255,255,255,.7); }
+  .row { display: flex; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
+  button { flex: 1 1 auto; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #2a323c; background: #1a2129; color: #e7ecf2; font-size: 15px; font-weight: 500; }
+  button.primary { background: #2f6feb; border-color: #2f6feb; }
+  button:disabled { opacity: .5; }
+  .card { background: #11151a; border: 1px solid #1f262e; border-radius: 12px; padding: 14px; margin-top: 12px; }
+  .field { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #1a2028; }
+  .field:last-child { border-bottom: 0; }
+  .field label { color: #8b96a3; font-size: 13px; }
+  .field input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #2a323c; background: #0b0d10; color: #e7ecf2; font: inherit; }
+  .status { font-size: 13px; color: #8b96a3; min-height: 1.2em; }
+  .log { font-size: 12px; color: #6b7682; white-space: pre-wrap; max-height: 80px; overflow: auto; }
+  .saved { margin-top: 16px; }
+  .saved-row { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #1a2028; font-size: 13px; }
+  .saved-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #1a2129; border: 1px solid #2a323c; font-size: 11px; color: #8b96a3; }
+  .toast { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); background: #1a2129; border: 1px solid #2a323c; padding: 10px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header><h1>Laptop Scanner</h1></header>
+<main>
+  <div class="stage" id="stage">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="overlay" class="overlay"></canvas>
+    <div class="reticle"></div>
+  </div>
+
+  <div class="row">
+    <button id="btn-start" class="primary">Start camera</button>
+    <button id="btn-barcode" disabled>Scan barcode</button>
+    <button id="btn-ocr" disabled>Scan text (OCR)</button>
+  </div>
+  <div class="status" id="status">Tap "Start camera", then point at the service-tag sticker.</div>
+
+  <div class="card">
+    <div class="field"><label for="f-name">Device name</label><input id="f-name" placeholder="e.g. JSMITH-LT01" autocapitalize="characters" /></div>
+    <div class="field"><label for="f-manufacturer">Manufacturer</label><input id="f-manufacturer" placeholder="Dell / HP / Lenovo / Apple" /></div>
+    <div class="field"><label for="f-model">Model</label><input id="f-model" placeholder="e.g. Latitude 5540" /></div>
+    <div class="field"><label for="f-serial">Serial / Service Tag</label><input id="f-serial" placeholder="e.g. 7XYZ123" autocapitalize="characters" /></div>
+  </div>
+
+  <div class="row">
+    <button id="btn-save" class="primary">Save</button>
+    <button id="btn-clear">Clear</button>
+    <button id="btn-export">Export CSV</button>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <strong style="font-size:14px;">OneDrive Excel sync</strong>
+      <button id="btn-help" style="flex:0 0 auto;min-width:auto;padding:4px 10px;min-height:auto;font-size:12px;">Setup help</button>
+    </div>
+    <div class="field"><label for="f-webhook">Flow URL</label><input id="f-webhook" placeholder="https://prod-XX.westeurope.logic.azure.com/..." /></div>
+    <div class="field"><label for="f-autosync" style="cursor:pointer;">Auto-sync</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#8b96a3;">
+        <input type="checkbox" id="f-autosync" style="width:18px;height:18px;" /> Send to OneDrive on Save
+      </label>
+    </div>
+    <div class="row" style="margin:8px 0 0;">
+      <button id="btn-sync">Sync pending</button>
+      <button id="btn-test">Test connection</button>
+    </div>
+    <div id="help" style="display:none;font-size:12px;color:#8b96a3;margin-top:10px;line-height:1.5;">
+      <strong style="color:#e7ecf2;">One-time setup (Power Automate):</strong>
+      <ol style="padding-left:18px;margin:6px 0;">
+        <li>Open <code>make.powerautomate.com</code> → <em>Create</em> → <em>Instant cloud flow</em>.</li>
+        <li>Trigger: <em>When an HTTP request is received</em>. Save once to get the URL.</li>
+        <li>Paste this JSON schema in the trigger:<br><code style="display:block;background:#0b0d10;padding:6px;border-radius:6px;margin-top:4px;white-space:pre-wrap;font-size:11px;">{"type":"object","properties":{"timestamp":{"type":"string"},"device_name":{"type":"string"},"manufacturer":{"type":"string"},"model":{"type":"string"},"serial":{"type":"string"}}}</code></li>
+        <li>Add action: Excel Online (Business) → <em>Add a row into a table</em>. Pick your <code>.xlsx</code> in OneDrive and the table (must be a real Excel table — select rows → Insert → Table).</li>
+        <li>Map columns to the trigger fields. Save the flow. Copy the HTTP URL into the box above.</li>
+      </ol>
+      Your Excel table should have columns: <code>timestamp, device_name, manufacturer, model, serial</code>.
+    </div>
+  </div>
+
+  <div class="card saved">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <strong style="font-size:14px;">Scanned devices</strong>
+      <span class="pill" id="count">0</span>
+    </div>
+    <div id="saved-list"></div>
+  </div>
+
+  <div class="log" id="log"></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { BrowserMultiFormatReader } from "https://esm.sh/@zxing/browser@0.1.5";
+
+  const video = document.getElementById("video");
+  const overlay = document.getElementById("overlay");
+  const statusEl = document.getElementById("status");
+  const logEl = document.getElementById("log");
+  const btnStart = document.getElementById("btn-start");
+  const btnBarcode = document.getElementById("btn-barcode");
+  const btnOcr = document.getElementById("btn-ocr");
+  const btnSave = document.getElementById("btn-save");
+  const btnClear = document.getElementById("btn-clear");
+  const btnExport = document.getElementById("btn-export");
+  const toast = document.getElementById("toast");
+
+  const fields = {
+    name: document.getElementById("f-name"),
+    manufacturer: document.getElementById("f-manufacturer"),
+    model: document.getElementById("f-model"),
+    serial: document.getElementById("f-serial"),
+  };
+
+  const STORAGE_KEY = "laptop-scanner-v1";
+  const SETTINGS_KEY = "laptop-scanner-settings-v1";
+  const settings = Object.assign({ webhook: "", autosync: false }, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"));
+  const fWebhook = document.getElementById("f-webhook");
+  const fAutosync = document.getElementById("f-autosync");
+  fWebhook.value = settings.webhook;
+  fAutosync.checked = !!settings.autosync;
+  const persistSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  fWebhook.addEventListener("change", () => { settings.webhook = fWebhook.value.trim(); persistSettings(); });
+  fAutosync.addEventListener("change", () => { settings.autosync = fAutosync.checked; persistSettings(); });
+  document.getElementById("btn-help").addEventListener("click", () => {
+    const h = document.getElementById("help");
+    h.style.display = h.style.display === "none" ? "block" : "none";
+  });
+  let stream = null;
+  let zxingControls = null;
+  const reader = new BrowserMultiFormatReader();
+
+  const setStatus = (m) => { statusEl.textContent = m; };
+  const log = (m) => { logEl.textContent = (logEl.textContent + "\n" + m).trim().split("\n").slice(-6).join("\n"); };
+  const showToast = (m) => { toast.textContent = m; toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 1500); };
+
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+      video.srcObject = stream;
+      await video.play();
+      btnBarcode.disabled = false;
+      btnOcr.disabled = false;
+      btnStart.textContent = "Restart camera";
+      setStatus("Camera ready. Choose Barcode or OCR.");
+    } catch (e) {
+      setStatus("Camera blocked: " + e.message + ". On iPhone use Safari and allow camera.");
+    }
+  }
+
+  async function scanBarcode() {
+    if (!stream) return;
+    setStatus("Scanning barcode… hold steady.");
+    try {
+      const deviceId = stream.getVideoTracks()[0].getSettings().deviceId;
+      let done = false;
+      zxingControls = await reader.decodeFromVideoDevice(deviceId || undefined, video, (result, err, controls) => {
+        if (result && !done) {
+          done = true;
+          controls.stop();
+          const text = result.getText().trim();
+          fields.serial.value = text;
+          guessManufacturer(text);
+          setStatus("Barcode read: " + text);
+          showToast("Serial captured");
+        }
+      });
+      setTimeout(() => { if (!done && zxingControls) { zxingControls.stop(); setStatus("No barcode detected. Try OCR or move closer."); } }, 15000);
+    } catch (e) {
+      setStatus("Barcode scan failed: " + e.message);
+    }
+  }
+
+  async function loadTesseract() {
+    if (window.Tesseract) return window.Tesseract;
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    return window.Tesseract;
+  }
+
+  function captureFrame() {
+    const c = document.createElement("canvas");
+    const w = video.videoWidth, h = video.videoHeight;
+    const cropX = w * 0.08, cropY = h * 0.12;
+    const cropW = w - cropX * 2, cropH = h - cropY * 2;
+    c.width = cropW; c.height = cropH;
+    c.getContext("2d").drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    return c;
+  }
+
+  async function scanOcr() {
+    if (!stream) return;
+    setStatus("Running OCR… this can take a few seconds.");
+    try {
+      const Tesseract = await loadTesseract();
+      const canvas = captureFrame();
+      const { data } = await Tesseract.recognize(canvas, "eng");
+      const text = (data.text || "").replace(/ /g, " ");
+      log(text.slice(0, 400));
+      const parsed = parseStickerText(text);
+      if (parsed.manufacturer) fields.manufacturer.value = parsed.manufacturer;
+      if (parsed.model) fields.model.value = parsed.model;
+      if (parsed.serial) fields.serial.value = parsed.serial;
+      setStatus("OCR done. Review the fields and edit if needed.");
+      showToast("Text captured");
+    } catch (e) {
+      setStatus("OCR failed: " + e.message);
+    }
+  }
+
+  function guessManufacturer(serialOrText) {
+    const t = serialOrText.toUpperCase();
+    if (/DELL/.test(t) || /^[A-Z0-9]{7}$/.test(t)) fields.manufacturer.value ||= /^[A-Z0-9]{7}$/.test(t) ? "Dell" : "Dell";
+    else if (/LENOVO/.test(t) || /^[A-Z]{2}[A-Z0-9]{5,8}$/.test(t)) fields.manufacturer.value ||= "Lenovo";
+    else if (/\bHP\b|HEWLETT/.test(t)) fields.manufacturer.value ||= "HP";
+    else if (/APPLE|MACBOOK/.test(t)) fields.manufacturer.value ||= "Apple";
+  }
+
+  function parseStickerText(raw) {
+    const out = { manufacturer: "", model: "", serial: "" };
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const joined = lines.join(" ").toUpperCase();
+
+    const vendors = ["DELL", "LENOVO", "HP", "HEWLETT-PACKARD", "APPLE", "ASUS", "ACER", "MICROSOFT", "TOSHIBA", "MSI", "RAZER", "FUJITSU", "PANASONIC"];
+    for (const v of vendors) if (joined.includes(v)) { out.manufacturer = v === "HEWLETT-PACKARD" ? "HP" : v[0] + v.slice(1).toLowerCase(); break; }
+
+    const snMatch = raw.match(/(?:S\s*\/?\s*N|SN|Serial(?:\s*(?:No|Number|#))?|Service\s*Tag)[^A-Z0-9]{0,4}([A-Z0-9-]{5,20})/i);
+    if (snMatch) out.serial = snMatch[1].toUpperCase();
+
+    const modelMatch = raw.match(/(?:Model(?:\s*(?:No|Number|#))?|MODEL)[^A-Z0-9]{0,4}([A-Z0-9 \-\/]{3,40})/i);
+    if (modelMatch) out.model = modelMatch[1].trim();
+    else {
+      const family = raw.match(/\b(Latitude|Precision|Inspiron|XPS|OptiPlex|ThinkPad|ThinkBook|IdeaPad|Yoga|EliteBook|ProBook|ZBook|Pavilion|Envy|Spectre|MacBook(?:\s*(?:Air|Pro))?|Surface(?:\s*\w+)?)\s+[A-Z0-9\-]+/i);
+      if (family) out.model = family[0];
+    }
+    return out;
+  }
+
+  // Storage / list
+  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; } }
+  function save(list) { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); render(); }
+  function render() {
+    const list = load();
+    document.getElementById("count").textContent = list.length;
+    const container = document.getElementById("saved-list");
+    container.innerHTML = "";
+    list.slice().reverse().forEach((r, i) => {
+      const row = document.createElement("div");
+      row.className = "saved-row";
+      const synced = r.synced ? '<span class="pill" style="color:#7fd17f;border-color:#2d4a2d;">synced</span>' : '<span class="pill" style="color:#e0b070;border-color:#4a3a2d;">pending</span>';
+      row.innerHTML = `<div class="grow"><strong>${escapeHtml(r.serial || "(no serial)")}</strong> — ${escapeHtml(r.manufacturer)} ${escapeHtml(r.model)} <span class="pill">${escapeHtml(r.name || "")}</span> ${synced}</div>`;
+      const del = document.createElement("button");
+      del.textContent = "✕"; del.style.flex = "0 0 auto"; del.style.minWidth = "44px";
+      del.onclick = () => { const all = load(); all.splice(all.length - 1 - i, 1); save(all); };
+      row.appendChild(del);
+      container.appendChild(row);
+    });
+  }
+  function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+  btnStart.addEventListener("click", startCamera);
+  btnBarcode.addEventListener("click", scanBarcode);
+  btnOcr.addEventListener("click", scanOcr);
+
+  async function pushToOneDrive(record) {
+    if (!settings.webhook) throw new Error("No Flow URL configured");
+    const payload = {
+      timestamp: record.ts,
+      device_name: record.name,
+      manufacturer: record.manufacturer,
+      model: record.model,
+      serial: record.serial,
+    };
+    const res = await fetch(settings.webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+  }
+
+  btnSave.addEventListener("click", async () => {
+    const record = {
+      ts: new Date().toISOString(),
+      name: fields.name.value.trim(),
+      manufacturer: fields.manufacturer.value.trim(),
+      model: fields.model.value.trim(),
+      serial: fields.serial.value.trim(),
+      synced: false,
+    };
+    if (!record.serial && !record.model && !record.name) { showToast("Fill at least one field"); return; }
+    const list = load(); list.push(record); save(list);
+    showToast("Saved");
+    Object.values(fields).forEach(f => f.value = "");
+    if (settings.autosync && settings.webhook) {
+      try { await pushToOneDrive(record); record.synced = true; save(load().map(r => r.ts === record.ts ? record : r)); showToast("Synced to OneDrive"); }
+      catch (e) { setStatus("Auto-sync failed: " + e.message + " (will retry via Sync pending)"); }
+    }
+  });
+
+  document.getElementById("btn-sync").addEventListener("click", async () => {
+    if (!settings.webhook) { showToast("Set the Flow URL first"); return; }
+    const list = load();
+    const pending = list.filter(r => !r.synced);
+    if (!pending.length) { showToast("Nothing pending"); return; }
+    setStatus(`Syncing ${pending.length} record(s)…`);
+    let ok = 0, fail = 0;
+    for (const r of pending) {
+      try { await pushToOneDrive(r); r.synced = true; ok++; }
+      catch (e) { fail++; log("Sync error: " + e.message); }
+    }
+    save(list);
+    setStatus(`Sync done. ${ok} sent, ${fail} failed.`);
+    showToast(`Synced ${ok}/${pending.length}`);
+  });
+
+  document.getElementById("btn-test").addEventListener("click", async () => {
+    if (!settings.webhook) { showToast("Set the Flow URL first"); return; }
+    setStatus("Testing connection…");
+    try {
+      await pushToOneDrive({ ts: new Date().toISOString(), name: "TEST", manufacturer: "TEST", model: "TEST", serial: "TEST-" + Date.now() });
+      setStatus("Test row sent. Check your Excel file.");
+      showToast("Test OK");
+    } catch (e) { setStatus("Test failed: " + e.message); }
+  });
+
+  btnClear.addEventListener("click", () => Object.values(fields).forEach(f => f.value = ""));
+
+  btnExport.addEventListener("click", () => {
+    const list = load();
+    if (!list.length) { showToast("Nothing to export"); return; }
+    const header = ["timestamp", "device_name", "manufacturer", "model", "serial"];
+    const rows = list.map(r => [r.ts, r.name, r.manufacturer, r.model, r.serial]);
+    const csv = [header, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `laptops-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  render();
+</script>
+</body>
+</html>
