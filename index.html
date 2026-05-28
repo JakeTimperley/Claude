@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <title>Laptop Scanner</title>
 <style>
   :root { color-scheme: dark; }
@@ -37,7 +40,7 @@
 </style>
 </head>
 <body>
-<header><h1>Laptop Scanner</h1></header>
+<header><h1>Laptop Scanner <span style="font-size:11px;color:#6b7682;font-weight:400;">build 3</span></h1></header>
 <main>
   <div class="stage" id="stage">
     <video id="video" playsinline autoplay muted></video>
@@ -105,8 +108,15 @@
 </main>
 <div class="toast" id="toast"></div>
 
-<script type="module">
-  import { BrowserMultiFormatReader } from "https://esm.sh/@zxing/browser@0.1.5";
+<script>
+  // Plain (non-module) script so a CDN import failure can't break the page.
+  let zxingReader = null;
+  async function loadZxing() {
+    if (zxingReader) return zxingReader;
+    const mod = await import("https://esm.sh/@zxing/browser@0.1.5");
+    zxingReader = new mod.BrowserMultiFormatReader();
+    return zxingReader;
+  }
 
   const video = document.getElementById("video");
   const overlay = document.getElementById("overlay");
@@ -146,7 +156,6 @@
   });
   let stream = null;
   let zxingControls = null;
-  const reader = new BrowserMultiFormatReader();
 
   const setStatus = (m) => { statusEl.textContent = m; };
   const log = (m) => { logEl.textContent = (logEl.textContent + "\n" + m).trim().split("\n").slice(-6).join("\n"); };
@@ -173,6 +182,7 @@
     if (!stream) return;
     setStatus("Scanning barcode… hold steady.");
     try {
+      const reader = await loadZxing();
       const deviceId = stream.getVideoTracks()[0].getSettings().deviceId;
       let done = false;
       zxingControls = await reader.decodeFromVideoDevice(deviceId || undefined, video, (result, err, controls) => {
