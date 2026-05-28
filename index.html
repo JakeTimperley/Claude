@@ -40,7 +40,7 @@
 </style>
 </head>
 <body>
-<header><h1>Laptop Scanner <span style="font-size:11px;color:#6b7682;font-weight:400;">build 3</span></h1></header>
+<header><h1>Laptop Scanner <span style="font-size:11px;color:#6b7682;font-weight:400;">build 4</span></h1></header>
 <main>
   <div class="stage" id="stage">
     <video id="video" playsinline autoplay muted></video>
@@ -307,12 +307,42 @@
       model: record.model,
       serial: record.serial,
     };
-    await fetch(url, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok && res.status !== 0) throw new Error("HTTP " + res.status);
+      return;
+    } catch (corsErr) {
+      // Browser blocked by CORS or network. Fall back to a hidden-form submit,
+      // which the browser allows cross-origin (no preflight). Power Automate
+      // parses the JSON body even when Content-Type is text/plain.
+      await new Promise((resolve) => {
+        const iframeName = "fl_" + Date.now();
+        const iframe = document.createElement("iframe");
+        iframe.name = iframeName;
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+        const form = document.createElement("form");
+        form.action = url;
+        form.method = "POST";
+        form.target = iframeName;
+        form.enctype = "text/plain";
+        // With enctype=text/plain the body becomes "name=value". Use a single
+        // empty-named field whose value is the JSON, so PA sees "=JSON".
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "";
+        input.value = JSON.stringify(payload);
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(() => { form.remove(); iframe.remove(); resolve(); }, 1500);
+      });
+    }
   }
 
   btnSave.addEventListener("click", async () => {
