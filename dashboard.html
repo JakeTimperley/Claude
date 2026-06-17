@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Trailhead — Training Dashboard</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0a0e14; --bg2:#0f1620; --card:#121b27; --card2:#16202e;
+    --line:#1f2c3c; --line2:#26384c;
+    --txt:#e8eef6; --mut:#8a99ad; --mut2:#5d6e82;
+    --acc:#fc5200;            /* Strava-ish orange */
+    --acc2:#ff7a33;
+    --blue:#3b9dff; --green:#37d49a; --purple:#a07bff; --yellow:#f5c451; --red:#ff5a6e;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit;cursor:pointer}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#21303f;border-radius:8px;border:2px solid var(--bg)}
+
+  .app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+
+  /* ---- Sidebar ---- */
+  .side{background:var(--bg2);border-right:1px solid var(--line);position:sticky;top:0;height:100vh;
+    display:flex;flex-direction:column;padding:18px 14px;gap:6px}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 16px}
+  .brand .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--acc),var(--acc2));
+    display:grid;place-items:center;font-weight:800;color:#fff;font-size:18px}
+  .brand b{font-size:16px;letter-spacing:.2px}
+  .brand small{display:block;color:var(--mut2);font-size:11px;font-weight:500;letter-spacing:.4px}
+  .nav{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+  .nav button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:transparent;border:0;
+    padding:10px 11px;border-radius:10px;color:var(--mut);font-weight:500}
+  .nav button .ic{width:18px;height:18px;flex:0 0 18px;opacity:.85}
+  .nav button:hover{background:#15202d;color:var(--txt)}
+  .nav button.active{background:#16222f;color:#fff}
+  .nav button.active .ic{opacity:1}
+  .nav button.active{box-shadow:inset 3px 0 0 var(--acc)}
+  .side .spacer{flex:1}
+  .syncbox{border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--card);font-size:12px;color:var(--mut)}
+  .syncbox .dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;box-shadow:0 0 8px var(--green)}
+  .syncbox b{color:var(--txt)}
+
+  /* ---- Main ---- */
+  .main{min-width:0;padding:26px 30px 60px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+  .topbar h1{margin:0;font-size:23px;letter-spacing:.2px}
+  .topbar p{margin:3px 0 0;color:var(--mut);font-size:13px}
+  .avatar{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+    padding:6px 12px 6px 6px;border-radius:999px}
+  .avatar img,.avatar .ph{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#2b6cb0,#1a8d6d);
+    display:grid;place-items:center;font-weight:700;color:#fff;font-size:14px}
+  .avatar .nm{font-size:13px;font-weight:600;line-height:1.1}
+  .avatar .nm small{display:block;color:var(--mut2);font-weight:500}
+
+  /* grid + cards */
+  .grid{display:grid;gap:16px}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .card.tight{padding:14px}
+  .card h3{margin:0 0 2px;font-size:13px;color:var(--mut);font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+  .card .big{font-size:30px;font-weight:750;letter-spacing:.3px;margin-top:6px}
+  .card .sub{color:var(--mut);font-size:12px;margin-top:3px}
+  .delta{font-size:12px;font-weight:650;padding:2px 7px;border-radius:999px;display:inline-flex;align-items:center;gap:3px}
+  .delta.up{color:var(--green);background:rgba(55,212,154,.12)}
+  .delta.down{color:var(--red);background:rgba(255,90,110,.12)}
+  .delta.flat{color:var(--mut);background:#1b2735}
+  .kpi-top{display:flex;align-items:center;justify-content:space-between}
+  .kpi-ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:#16222f}
+  .section-h{display:flex;align-items:center;justify-content:space-between;margin:26px 2px 12px}
+  .section-h h2{margin:0;font-size:17px}
+  .section-h .link{color:var(--mut);font-size:13px;font-weight:600}
+  .section-h .link:hover{color:var(--acc2)}
+
+  /* badges / chips */
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:#16222f;border:1px solid var(--line2);color:var(--mut)}
+  .chip.run{color:var(--acc2)}
+  .chip.gym{color:var(--purple)}
+  .chip.rehab{color:var(--green)}
+  .chip.race{color:var(--yellow)}
+
+  /* run/activity list */
+  .alist{display:flex;flex-direction:column}
+  .arow{display:grid;grid-template-columns:42px 1fr auto;gap:14px;align-items:center;padding:13px 8px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:10px}
+  .arow:last-child{border-bottom:0}
+  .arow:hover{background:#15202d}
+  .arow .ai{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:#16222f}
+  .arow .at b{font-size:14.5px}
+  .arow .at small{display:block;color:var(--mut);font-size:12px;margin-top:1px}
+  .arow .metrics{display:flex;gap:22px;text-align:right}
+  .arow .metrics div b{font-size:14px;display:block}
+  .arow .metrics div small{color:var(--mut2);font-size:11px}
+  @media(max-width:680px){.arow .metrics div:nth-child(n+3){display:none}}
+
+  table.sets{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+  table.sets th{text-align:left;color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--line)}
+  table.sets td{padding:9px 10px;border-bottom:1px solid var(--line)}
+  table.sets tr:last-child td{border-bottom:0}
+  table.sets td.pr{color:var(--yellow);font-weight:700}
+
+  .bar{height:8px;border-radius:6px;background:#1b2735;overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+
+  /* run detail */
+  .back{display:inline-flex;align-items:center;gap:7px;color:var(--mut);font-size:13px;font-weight:600;background:transparent;border:0;padding:6px 4px;margin-bottom:8px}
+  .back:hover{color:var(--txt)}
+  .map{position:relative;width:100%;aspect-ratio:16/9;background:radial-gradient(120% 120% at 30% 20%,#13202b,#0c141d);border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+  .map svg{position:absolute;inset:0;width:100%;height:100%}
+  .map .ovl{position:absolute;left:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap}
+  .splitbar{display:flex;align-items:flex-end;gap:4px;height:120px}
+  .splitbar .s{flex:1;background:linear-gradient(180deg,var(--acc2),var(--acc));border-radius:5px 5px 2px 2px;position:relative;min-height:6px}
+  .splitbar .s:hover{filter:brightness(1.15)}
+  .splitbar .s small{position:absolute;top:-17px;left:0;right:0;text-align:center;font-size:10px;color:var(--mut)}
+  .splitbar .s span{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--mut2)}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
+
+  .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+
+  /* plan */
+  .day{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .day .dh{display:flex;align-items:center;justify-content:space-between;padding:12px 15px;background:var(--card2);font-weight:700}
+  .day .dh small{color:var(--mut);font-weight:500}
+  .day .ex{display:grid;grid-template-columns:1fr auto;gap:8px;padding:11px 15px;border-top:1px solid var(--line);font-size:13.5px}
+  .day .ex small{color:var(--mut)}
+  .day .ex .pres{color:var(--mut);font-variant-numeric:tabular-nums}
+  .tag{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:6px}
+  .tag.main{background:rgba(252,82,0,.15);color:var(--acc2)}
+  .tag.acc{background:rgba(160,123,255,.15);color:var(--purple)}
+  .tag.rehab{background:rgba(55,212,154,.15);color:var(--green)}
+  .tag.done{background:rgba(55,212,154,.15);color:var(--green)}
+  .tag.todo{background:#1b2735;color:var(--mut)}
+
+  .muted{color:var(--mut)}
+  .hide{display:none!important}
+  .hl{color:var(--acc2);font-weight:700}
+
+  @media(max-width:1000px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr 1fr}}
+  @media(max-width:760px){
+    .app{grid-template-columns:1fr}
+    .side{position:fixed;z-index:50;left:0;top:0;width:230px;transform:translateX(-100%);transition:transform .2s}
+    .side.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.5)}
+    .main{padding:18px 16px 60px}
+    .menu-btn{display:inline-grid!important}
+    .g2,.g3,.g4{grid-template-columns:1fr}
+  }
+  .menu-btn{display:none;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--card);border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===== Sidebar ===== -->
+  <aside class="side" id="side">
+    <div class="brand">
+      <div class="logo">▲</div>
+      <div><b>Trailhead</b><small>TRAINING OS</small></div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-view="overview" class="active"></button>
+      <button data-view="running"></button>
+      <button data-view="gym"></button>
+      <button data-view="plan"></button>
+      <button data-view="rehab"></button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="syncbox">
+      <div><span class="dot"></span><b>Garmin</b> connected</div>
+      <div style="margin-top:5px">Last sync: <span id="syncTime">just now</span></div>
+      <div style="margin-top:2px;color:var(--mut2)">Forerunner 965 · HRM-Pro</div>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+        <div>
+          <h1 id="pageTitle">Overview</h1>
+          <p id="pageSub">Your week at a glance</p>
+        </div>
+      </div>
+      <div class="avatar">
+        <div class="ph" id="avi">JT</div>
+        <div class="nm">Athlete<small id="aviSub">Marathon block · Wk 7</small></div>
+      </div>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<script>
+/* =========================================================================
+   DATA LAYER
+   Shaped to mirror Garmin Connect / Strava payloads so a live API can drop
+   in later. All values below are sample data (no network access in sandbox).
+   ========================================================================= */
+const profile = {
+  name:"Athlete", initials:"JT",
+  vo2max:58, vo2maxPrev:56, vo2Trend:[52,53,53,54,55,55,56,56,57,57,58,58],
+  restingHr:46, restingHrPrev:48,
+  weight:78.4, bodyFat:13.6,
+  trainingLoad:842, loadStatus:"Productive", loadPrev:790,
+  hrZones:{z1:62,z2:138,z3:62,z4:24,z5:8} // minutes this week
+};
+
+const racePredictors = [
+  {dist:"5K",     time:"18:42", pace:"3:44 /km", trend:"-0:09"},
+  {dist:"10K",    time:"39:05", pace:"3:55 /km", trend:"-0:21"},
+  {dist:"Half",   time:"1:26:40", pace:"4:06 /km", trend:"-0:48"},
+  {dist:"Marathon",time:"3:02:15", pace:"4:19 /km", trend:"-1:55"},
+];
+
+// route generator -> deterministic wandering GPS-like path in a 0..100 box
+function makeRoute(seed, points, spread){
+  let s = seed; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
+  let x=50+(rnd()-.5)*20, y=50+(rnd()-.5)*20, ang=rnd()*Math.PI*2;
+  const pts=[[x,y]];
+  for(let i=0;i<points;i++){
+    ang += (rnd()-.5)*1.1;
+    x += Math.cos(ang)*spread*(0.6+rnd()*0.8);
+    y += Math.sin(ang)*spread*(0.6+rnd()*0.8);
+    x=Math.max(8,Math.min(92,x)); y=Math.max(10,Math.min(90,y));
+    pts.push([+x.toFixed(1),+y.toFixed(1)]);
+  }
+  return pts;
+}
+
+const runs = [
+  { id:"r1", title:"Morning Threshold", type:"run", date:"Today · 6:42 AM",
+    distance:14.2, duration:"58:11", pace:"4:06", avgHr:162, maxHr:178, elev:142, cal:986,
+    vo2:58, effort:"Tempo", suffer:74, weather:"12°C · Clear",
+    splits:[4.18,4.12,4.05,4.02,3.58,3.55,4.06,4.10,4.08,4.01,3.59,3.57,4.04,4.20],
+    hr:[120,140,150,158,166,170,168,164,162,160,158,170,172,150],
+    elevProfile:[10,14,22,30,26,18,24,40,52,46,38,30,20,12],
+    route:makeRoute(7,28,7) },
+  { id:"r2", title:"Easy Recovery", type:"run", date:"Yesterday · 5:30 PM",
+    distance:8.0, duration:"43:20", pace:"5:25", avgHr:138, maxHr:149, elev:48, cal:512,
+    vo2:57, effort:"Easy", suffer:31, weather:"15°C · Cloud",
+    splits:[5.30,5.28,5.24,5.26,5.22,5.20,5.28,5.30],
+    hr:[110,128,134,138,140,142,138,134],
+    elevProfile:[6,8,10,9,7,6,8,4],
+    route:makeRoute(19,18,5) },
+  { id:"r3", title:"Long Run — Hilly", type:"run", date:"Sun · 7:10 AM",
+    distance:30.1, duration:"2:18:40", pace:"4:36", avgHr:151, maxHr:172, elev:486, cal:2240,
+    vo2:58, effort:"Long", suffer:118, weather:"9°C · Light rain",
+    splits:[4.50,4.44,4.40,4.38,4.35,4.33,4.36,4.40,4.42,4.30,4.28,4.31,4.34,4.38,4.41,4.36,4.30,4.27,4.33,4.39,4.44,4.40,4.35,4.30,4.28,4.32,4.37,4.42,4.46,4.55],
+    hr:[130,142,148,150,152,150,151,153,155,154,152,150,151,153,156,158,155,153,151,150,152,154,157,159,160,161,163,165,168,170],
+    elevProfile:[20,40,70,90,60,40,55,80,110,90,70,50,65,95,120,100,70,45,60,85,110,90,65,40,55,80,100,75,50,30],
+    route:makeRoute(33,44,8) },
+  { id:"r4", title:"Track Intervals 8×800", type:"run", date:"Fri · 6:15 PM",
+    distance:11.6, duration:"49:55", pace:"4:18", avgHr:159, maxHr:184, elev:22, cal:790,
+    vo2:59, effort:"VO2 Max", suffer:96, weather:"14°C · Clear",
+    splits:[5.10,3.05,4.50,3.02,4.48,3.00,4.46,2.58,4.45,3.01,4.44,2.59],
+    hr:[120,178,150,180,148,182,150,184,148,181,150,160],
+    elevProfile:[4,6,5,6,5,6,5,6,5,6,5,4],
+    route:makeRoute(51,24,4) },
+];
+
+const oneRepMax = [
+  {lift:"Back Squat",  current:185, prev:180, goal:200, unit:"kg", color:"--acc2",
+   history:[150,155,160,162,168,170,172,175,178,180,182,185]},
+  {lift:"Deadlift",    current:220, prev:215, goal:240, unit:"kg", color:"--purple",
+   history:[180,185,190,195,200,205,205,210,212,215,218,220]},
+  {lift:"Bench Press", current:130, prev:130, goal:140, unit:"kg", color:"--blue",
+   history:[105,108,110,115,118,120,122,124,126,128,130,130]},
+  {lift:"Overhead Press",current:80, prev:77, goal:90, unit:"kg", color:"--green",
+   history:[60,62,64,66,68,70,72,73,75,76,77,80]},
+];
+
+const gymTotals = {
+  sessions:96, sessionsThisMonth:14,
+  volumeWeek:48250, volumeWeekPrev:44100, // kg lifted
+  setsWeek:184, prsThisMonth:5
+};
+
+const gymSessions = [
+  { id:"g1", title:"Lower — Squat Focus", type:"gym", date:"Today · 12:30 PM",
+    duration:"1:08", volume:14820, sets:22, tonnageNote:"+6% vs last",
+    exercises:[
+      {name:"Back Squat",      sets:[[185,1],[170,3],[170,3],[150,5],[150,5]], pr:true},
+      {name:"Romanian Deadlift",sets:[[140,6],[140,6],[140,6]]},
+      {name:"Bulgarian Split Squat",sets:[[40,8],[40,8],[40,8]]},
+      {name:"Leg Press",       sets:[[260,10],[260,10],[260,10]]},
+      {name:"Standing Calf Raise",sets:[[120,12],[120,12],[120,12]]},
+    ]},
+  { id:"g2", title:"Upper — Push", type:"gym", date:"Mon · 7:00 AM",
+    duration:"0:54", volume:11260, sets:19, tonnageNote:"+2% vs last",
+    exercises:[
+      {name:"Bench Press",     sets:[[130,1],[120,3],[110,5],[110,5]], pr:true},
+      {name:"Overhead Press",  sets:[[72,5],[72,5],[72,5]]},
+      {name:"Incline DB Press",sets:[[34,8],[34,8],[34,8]]},
+      {name:"Cable Fly",       sets:[[25,12],[25,12],[25,12]]},
+      {name:"Triceps Pushdown",sets:[[45,12],[45,12],[45,12]]},
+    ]},
+  { id:"g3", title:"Pull + Posterior", type:"gym", date:"Sat · 9:20 AM",
+    duration:"1:02", volume:12940, sets:20, tonnageNote:"+4% vs last",
+    exercises:[
+      {name:"Deadlift",        sets:[[220,1],[200,3],[180,5]], pr:true},
+      {name:"Weighted Pull-up",sets:[[20,6],[20,6],[15,8]]},
+      {name:"Barbell Row",     sets:[[90,8],[90,8],[90,8]]},
+      {name:"Face Pull",       sets:[[30,15],[30,15],[30,15]]},
+      {name:"Hammer Curl",     sets:[[18,12],[18,12],[18,12]]},
+    ]},
+];
+
+const liftPlan = [
+  {day:"Monday",  focus:"Upper — Push", tag:"main", done:true, items:[
+    ["Bench Press","5×3 @ 85%"],["Overhead Press","4×5"],["Incline DB Press","3×8-10"],
+    ["Cable Fly","3×12"],["Triceps Pushdown","3×12"]]},
+  {day:"Tuesday", focus:"Easy Run + Mobility", tag:"rehab", done:true, items:[
+    ["Z2 Run","45 min"],["Hip CARs","2×8/side"],["Calf raises","3×15"]]},
+  {day:"Wednesday",focus:"Lower — Squat", tag:"main", done:false, items:[
+    ["Back Squat","5×3 @ 85%"],["Romanian Deadlift","3×6"],["Bulgarian Split Squat","3×8"],
+    ["Leg Press","3×10"],["Calf Raise","3×12"]]},
+  {day:"Thursday",focus:"Track Intervals", tag:"acc", done:false, items:[
+    ["Warm-up","2 km"],["8×800m","@ 5K pace, 90s jog"],["Cool-down","2 km"]]},
+  {day:"Friday",  focus:"Upper — Pull", tag:"main", done:false, items:[
+    ["Deadlift","4×3 @ 80%"],["Weighted Pull-up","4×6"],["Barbell Row","3×8"],
+    ["Face Pull","3×15"],["Hammer Curl","3×12"]]},
+  {day:"Saturday",focus:"Long Run", tag:"acc", done:false, items:[
+    ["Long Run","28–32 km"],["Fuel","60g carbs/hr"],["Strides","4×20s"]]},
+  {day:"Sunday",  focus:"Rest / Rehab", tag:"rehab", done:false, items:[
+    ["Full rehab circuit","see Rehab tab"],["Foam roll","10 min"]]},
+];
+
+const rehabPlan = {
+  area:"Right Achilles + Left Hip", phase:"Phase 2 — Load tolerance", adherence:86,
+  blocks:[
+    {name:"Achilles loading", color:"--green", items:[
+      ["Heavy slow calf raise","3×8 @ 30kg","Mon/Wed/Fri"],
+      ["Seated soleus raise","3×12","Mon/Wed/Fri"],
+      ["Eccentric heel drop","3×15/side","Daily"],
+    ]},
+    {name:"Hip stability", color:"--blue", items:[
+      ["Copenhagen plank","3×20s/side","Tue/Thu"],
+      ["Banded clamshell","3×15/side","Daily"],
+      ["Single-leg RDL","3×10/side","Tue/Fri"],
+    ]},
+    {name:"Mobility & control", color:"--purple", items:[
+      ["Hip 90/90 CARs","2×8/side","Daily"],
+      ["Ankle dorsiflexion drill","2×10/side","Daily"],
+      ["Deep squat hold","3×30s","Daily"],
+    ]},
+  ]
+};
+
+/* =========================================================================
+   ICONS (inline SVG, no external deps)
+   ========================================================================= */
+const I = {
+  overview:'<path d="M3 3h7v7H3zM14 3h7v4h-7zM14 10h7v11h-7zM3 14h7v7H3z"/>',
+  running:'<path d="M13 4a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM11 8l-3 4 3 2 1 6m1-9 3 1 2 3m-7-3-4 7"/>',
+  gym:'<path d="M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12"/>',
+  plan:'<path d="M4 5h16M4 5v14h16V5M8 3v4M16 3v4M8 11h8M8 15h5"/>',
+  rehab:'<path d="M12 21s-7-4.35-9.5-8.5C.5 9 2 5.5 5.5 5.5c2 0 3 1 3.5 2 .5-1 1.5-2 3.5-2C16 5.5 17.5 9 15.5 12.5 13 16.65 12 21 12 21z"/>',
+  bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  heart:'<path d="M12 21s-7-4.35-9.5-8.5C.5 9 2 5.5 5.5 5.5c2 0 3 1 3.5 2 .5-1 1.5-2 3.5-2C16 5.5 17.5 9 15.5 12.5 13 16.65 12 21 12 21z"/>',
+  fire:'<path d="M12 2c1 3-1 4-1 6a3 3 0 0 0 6 0c0-1 0-2-1-3 3 2 5 5 5 9a8 8 0 1 1-16 0c0-4 3-7 4-9 1 2 2 2 3-3z"/>',
+  trend:'<path d="M3 17l6-6 4 4 8-8M21 7h-5M21 7v5"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  trophy:'<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0zM7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/>',
+  mountain:'<path d="M3 20 10 7l4 7 2-3 5 9z"/>',
+  map:'<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/>',
+  weight:'<path d="M7 8h10l1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/>',
+  calendar:'<path d="M4 5h16v15H4zM4 9h16M8 3v4M16 3v4"/>',
+};
+const ic=(n,c="currentColor",sw=2)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${I[n]||''}</svg>`;
+const cssvar=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim()||v;
+
+/* =========================================================================
+   CHART HELPERS (inline SVG)
+   ========================================================================= */
+function lineChart(data,{w=320,h=80,color="--acc2",fill=true,min,max}={}){
+  const c=cssvar(color);
+  const mn=min??Math.min(...data), mx=max??Math.max(...data);
+  const rng=(mx-mn)||1, pad=4;
+  const X=i=>pad+i*((w-pad*2)/(data.length-1));
+  const Y=v=>h-pad-((v-mn)/rng)*(h-pad*2);
+  const pts=data.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const area=`${pad},${h-pad} ${pts} ${w-pad},${h-pad}`;
+  const gid="g"+Math.random().toString(36).slice(2,7);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${c}" stop-opacity=".28"/><stop offset="1" stop-color="${c}" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${fill?`<polygon points="${area}" fill="url(#${gid})"/>`:""}
+    <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${X(data.length-1)}" cy="${Y(data[data.length-1])}" r="3.5" fill="${c}"/>
+  </svg>`;
+}
+function barChart(data,{w=320,h=90,color="--acc2"}={}){
+  const c=cssvar(color), mx=Math.max(...data)||1, n=data.length, gap=3;
+  const bw=(w-(n-1)*gap)/n;
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">
+    ${data.map((v,i)=>{const bh=Math.max(3,(v/mx)*(h-6));return `<rect x="${(i*(bw+gap)).toFixed(1)}" y="${(h-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2.5" fill="${c}" opacity="${.55+.45*(v/mx)}"/>`}).join("")}
+  </svg>`;
+}
+function donut(segments,{size=120,thick=14}={}){
+  const r=(size-thick)/2, cx=size/2, cy=size/2, C=2*Math.PI*r;
+  const total=segments.reduce((a,s)=>a+s.v,0)||1; let off=0;
+  const arcs=segments.map(s=>{const len=(s.v/total)*C;const el=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${cssvar(s.c)}" stroke-width="${thick}" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt"/>`;off+=len;return el}).join("");
+  return `<svg viewBox="0 0 ${size} ${size}" style="width:${size}px;height:${size}px">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1b2735" stroke-width="${thick}"/>${arcs}</svg>`;
+}
+
+/* =========================================================================
+   ROUTE MAP
+   ========================================================================= */
+function routeMap(route,chips=[]){
+  // map 0..100 coords to a 800x450 viewbox
+  const W=800,H=450, mx=W/100, my=H/100;
+  const path=route.map((p,i)=>`${i?'L':'M'}${(p[0]*mx).toFixed(1)} ${(p[1]*my).toFixed(1)}`).join(" ");
+  const start=route[0], end=route[route.length-1];
+  // faint grid to read as a map
+  let grid="";
+  for(let i=1;i<10;i++){grid+=`<line x1="${i*80}" y1="0" x2="${i*80}" y2="${H}"/><line x1="0" y1="${i*45}" x2="${W}" y2="${i*45}"/>`}
+  return `<div class="map">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">
+      <g stroke="#172430" stroke-width="1">${grid}</g>
+      <path d="${path}" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${path}" fill="none" stroke="${cssvar('--acc')}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${(start[0]*mx).toFixed(1)}" cy="${(start[1]*my).toFixed(1)}" r="9" fill="${cssvar('--green')}" stroke="#0a0e14" stroke-width="3"/>
+      <circle cx="${(end[0]*mx).toFixed(1)}" cy="${(end[1]*my).toFixed(1)}" r="9" fill="${cssvar('--red')}" stroke="#0a0e14" stroke-width="3"/>
+    </svg>
+    <div class="ovl">${chips.map(c=>`<span class="chip">${c}</span>`).join("")}</div>
+  </div>`;
+}
+
+/* =========================================================================
+   FORMAT HELPERS
+   ========================================================================= */
+const paceStr=m=>{const t=Math.floor(m),s=Math.round((m-t)*60);return `${t}:${String(s).padStart(2,'0')}`};
+function deltaBadge(cur,prev,{invert=false,suffix=""}={}){
+  const d=cur-prev; if(Math.abs(d)<1e-9) return `<span class="delta flat">—</span>`;
+  const good = invert ? d<0 : d>0;
+  const arrow = d>0?"▲":"▼";
+  const cls = good?"up":"down";
+  const val = (d>0?"+":"")+(Number.isInteger(d)?d:d.toFixed(1))+suffix;
+  return `<span class="delta ${cls}">${arrow} ${val}</span>`;
+}
+
+/* =========================================================================
+   VIEWS
+   ========================================================================= */
+const viewEl=document.getElementById('view');
+const titles={overview:["Overview","Your week at a glance"],running:["Running","Activities, fitness & race readiness"],
+  gym:["Strength","1RM tracking, volume & session logs"],plan:["Lift Plan","Current weekly programme"],rehab:["Rehab","Prehab & return-to-run protocol"]};
+
+function viewOverview(){
+  const p=profile;
+  const kpi=(icn,col,label,val,sub,badge)=>`<div class="card tight">
+    <div class="kpi-top"><div class="kpi-ic">${ic(icn,cssvar(col))}</div>${badge||""}</div>
+    <h3 style="margin-top:12px">${label}</h3><div class="big">${val}</div><div class="sub">${sub}</div></div>`;
+
+  const races=racePredictors.map(r=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 2px;border-bottom:1px solid var(--line)">
+    <div><b style="font-size:15px">${r.dist}</b><div class="muted" style="font-size:12px">${r.pace}</div></div>
+    <div style="text-align:right"><b style="font-size:17px;font-variant-numeric:tabular-nums">${r.time}</b>
+      <div class="delta up" style="font-size:11px">▼ ${r.trend}</div></div></div>`).join("");
+
+  const z=p.hrZones;
+  const zoneSeg=[{v:z.z1,c:"--mut2"},{v:z.z2,c:"--green"},{v:z.z3,c:"--yellow"},{v:z.z4,c:"--acc2"},{v:z.z5,c:"--red"}];
+  const zTotal=Object.values(z).reduce((a,b)=>a+b,0);
+
+  const recent=runs.slice(0,3).map(r=>activityRow(r)).join("");
+
+  return `
+  <div class="grid g4">
+    ${kpi("bolt","--acc2","VO₂ Max",p.vo2max,"ml/kg/min · Superior",deltaBadge(p.vo2max,p.vo2maxPrev,{suffix:""}))}
+    ${kpi("heart","--red","Resting HR",p.restingHr+" bpm","Excellent",deltaBadge(p.restingHr,p.restingHrPrev,{invert:true,suffix:""}))}
+    ${kpi("trend","--green","Training Load",p.trainingLoad,p.loadStatus,deltaBadge(p.trainingLoad,p.loadPrev))}
+    ${kpi("weight","--blue","Body Weight",p.weight+" kg",p.bodyFat+"% body fat",deltaBadge(p.weight,p.weight+0.6,{invert:true,suffix:" kg"}))}
+  </div>
+
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card" style="grid-column:span 2">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><h3>VO₂ Max trend</h3><div class="big" style="font-size:24px">${p.vo2max} <span class="muted" style="font-size:13px;font-weight:500">last 12 weeks</span></div></div>
+        <span class="chip race">${ic('trophy',cssvar('--yellow'))} Top 5% age group</span>
+      </div>
+      <div style="margin-top:10px">${lineChart(p.vo2Trend,{h:130,color:'--acc2'})}</div>
+    </div>
+    <div class="card">
+      <h3>Race Predictors</h3>
+      <div style="margin-top:4px">${races}</div>
+    </div>
+  </div>
+
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card" style="display:flex;gap:18px;align-items:center">
+      <div style="position:relative">${donut(zoneSeg)}
+        <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center">
+          <div><b style="font-size:20px">${Math.round(zTotal/60*10)/10}h</b><div class="muted" style="font-size:11px">this week</div></div></div>
+      </div>
+      <div><h3>HR Zones</h3>
+        <div class="legend" style="flex-direction:column;gap:7px;margin-top:8px">
+          <span><i style="background:var(--mut2)"></i>Z1 ${z.z1}m</span>
+          <span><i style="background:var(--green)"></i>Z2 ${z.z2}m</span>
+          <span><i style="background:var(--yellow)"></i>Z3 ${z.z3}m</span>
+          <span><i style="background:var(--acc2)"></i>Z4 ${z.z4}m</span>
+          <span><i style="background:var(--red)"></i>Z5 ${z.z5}m</span>
+        </div></div>
+    </div>
+    <div class="card">
+      <h3>Weekly Volume</h3>
+      <div class="big" style="font-size:24px">63.9 <span class="muted" style="font-size:13px;font-weight:500">km running</span></div>
+      <div style="margin-top:8px">${barChart([42,55,48,60,58,64,52,68,57,64],{h:70,color:'--acc2'})}</div>
+      <div class="sub">+9% vs 4-week average</div>
+    </div>
+    <div class="card">
+      <h3>Strength Volume</h3>
+      <div class="big" style="font-size:24px">48.3 <span class="muted" style="font-size:13px;font-weight:500">tonnes / wk</span></div>
+      <div style="margin-top:8px">${barChart([38,41,40,44,42,45,43,46,44,48],{h:70,color:'--purple'})}</div>
+      <div class="sub">${gymTotals.prsThisMonth} PRs this month</div>
+    </div>
+  </div>
+
+  <div class="section-h"><h2>Recent activity</h2><a class="link" data-view="running" role="button">View all →</a></div>
+  <div class="card tight"><div class="alist">${recent}</div></div>
+  `;
+}
+
+function activityRow(a){
+  const isRun=a.type==="run";
+  const icn=isRun?(a.effort==="VO2 Max"?"bolt":"running"):"gym";
+  const col=isRun?"--acc2":"--purple";
+  const m1=isRun?`<div><b>${a.distance} km</b><small>distance</small></div>`:`<div><b>${(a.volume/1000).toFixed(1)} t</b><small>volume</small></div>`;
+  const m2=isRun?`<div><b>${a.pace} /km</b><small>pace</small></div>`:`<div><b>${a.sets}</b><small>sets</small></div>`;
+  const m3=isRun?`<div><b>${a.avgHr}</b><small>avg HR</small></div>`:`<div><b>${a.duration}</b><small>time</small></div>`;
+  return `<div class="arow" data-activity="${a.id}">
+    <div class="ai">${ic(icn,cssvar(col))}</div>
+    <div class="at"><b>${a.title}</b><small>${a.date}${isRun?` · ${a.duration}`:''}</small>
+      <div class="pillrow">${isRun?`<span class="chip run">${a.effort}</span>`:`<span class="chip gym">Strength</span>`}
+      ${a.suffer?`<span class="chip">⚡ ${a.suffer}</span>`:''}${a.pr||a.exercises&&a.exercises.some(e=>e.pr)?'<span class="chip race">🏆 PR</span>':''}</div></div>
+    <div class="metrics">${m1}${m2}${m3}</div>
+  </div>`;
+}
+
+function viewRunning(){
+  const list=runs.map(activityRow).join("");
+  const totals=runs.reduce((a,r)=>({d:a.d+r.distance,e:a.e+r.elev}),{d:0,e:0});
+  return `
+  <div class="grid g4">
+    <div class="card tight"><h3>This week</h3><div class="big" style="font-size:24px">${totals.d.toFixed(1)} km</div><div class="sub">${runs.length} runs</div></div>
+    <div class="card tight"><h3>Elevation</h3><div class="big" style="font-size:24px">${totals.e} m</div><div class="sub">total climb</div></div>
+    <div class="card tight"><h3>Avg VO₂ Max</h3><div class="big" style="font-size:24px">${profile.vo2max}</div><div class="sub">trending up</div></div>
+    <div class="card tight"><h3>Marathon ready</h3><div class="big" style="font-size:24px">3:02</div><div class="sub">predicted finish</div></div>
+  </div>
+  <div class="section-h"><h2>Activities</h2><span class="muted" style="font-size:13px">Click a run for the full breakdown</span></div>
+  <div class="card tight"><div class="alist">${list}</div></div>`;
+}
+
+function viewRun(a){
+  const fastest=Math.min(...a.splits), slowest=Math.max(...a.splits);
+  const splitBars=a.splits.map((s,i)=>{
+    const h=18+ (slowest-s)/((slowest-fastest)||1)*82;
+    return `<div class="s" style="height:${h.toFixed(0)}%"><small>${paceStr(s)}</small><span>${i+1}</span></div>`;
+  }).join("");
+  const stat=(l,v,s)=>`<div class="card tight" style="text-align:center"><h3>${l}</h3><div class="big" style="font-size:22px">${v}</div>${s?`<div class="sub">${s}</div>`:''}</div>`;
+  return `
+  <button class="back" data-view="running">← Back to activities</button>
+  <div style="display:flex;align-items:center;gap:12px;margin:4px 0 16px;flex-wrap:wrap">
+    <div class="kpi-ic" style="width:44px;height:44px">${ic(a.effort==='VO2 Max'?'bolt':'running',cssvar('--acc2'))}</div>
+    <div><h2 style="margin:0">${a.title}</h2><div class="muted" style="font-size:13px">${a.date} · ${a.weather}</div></div>
+    <span class="chip run" style="margin-left:auto">${a.effort}</span>
+    <span class="chip race">🏔 VO₂ ${a.vo2}</span>
+  </div>
+
+  ${routeMap(a.route,[`📍 ${a.distance} km`,`⛰ ${a.elev} m`,`⏱ ${a.duration}`])}
+
+  <div class="grid g4" style="margin-top:16px">
+    ${stat("Distance",a.distance+" km")}
+    ${stat("Avg Pace",a.pace+" /km")}
+    ${stat("Moving Time",a.duration)}
+    ${stat("Calories",a.cal)}
+    ${stat("Avg HR",a.avgHr+" bpm")}
+    ${stat("Max HR",a.maxHr+" bpm")}
+    ${stat("Elevation",a.elev+" m")}
+    ${stat("Relative Effort",a.suffer)}
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card">
+      <h3>Heart Rate</h3>
+      <div style="margin-top:10px">${lineChart(a.hr,{h:140,color:'--red'})}</div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:var(--red)"></i>BPM over distance · avg ${a.avgHr} · max ${a.maxHr}</span></div>
+    </div>
+    <div class="card">
+      <h3>Elevation</h3>
+      <div style="margin-top:10px">${lineChart(a.elevProfile,{h:140,color:'--green'})}</div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:var(--green)"></i>Metres · total climb ${a.elev} m</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h3>Splits (per km)</h3>
+      <span class="muted" style="font-size:12px">Fastest ${paceStr(fastest)} · Slowest ${paceStr(slowest)}</span></div>
+    <div class="splitbar" style="margin-top:26px;margin-bottom:22px">${splitBars}</div>
+  </div>`;
+}
+
+function viewGym(){
+  const cards=oneRepMax.map(l=>{
+    const pct=Math.min(100,Math.round(l.current/l.goal*100));
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div><h3>${l.lift}</h3><div class="big">${l.current}<span class="muted" style="font-size:14px;font-weight:500"> ${l.unit}</span></div></div>
+        ${deltaBadge(l.current,l.prev,{suffix:" kg"})}
+      </div>
+      <div style="margin:8px 0 4px">${lineChart(l.history,{h:54,color:l.color})}</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-bottom:5px"><span>Goal ${l.goal} ${l.unit}</span><span>${pct}%</span></div>
+      <div class="bar"><i style="width:${pct}%;background:linear-gradient(90deg,${cssvar(l.color)},${cssvar(l.color)})"></i></div>
+    </div>`;
+  }).join("");
+
+  const sessions=gymSessions.map(activityRow).join("");
+  return `
+  <div class="grid g4">
+    <div class="card tight"><h3>Total Sessions</h3><div class="big" style="font-size:24px">${gymTotals.sessions}</div><div class="sub">${gymTotals.sessionsThisMonth} this month</div></div>
+    <div class="card tight"><h3>Volume / week</h3><div class="big" style="font-size:24px">${(gymTotals.volumeWeek/1000).toFixed(1)} t</div><div class="sub">${deltaBadge(gymTotals.volumeWeek,gymTotals.volumeWeekPrev,{suffix:'kg'})}</div></div>
+    <div class="card tight"><h3>Sets / week</h3><div class="big" style="font-size:24px">${gymTotals.setsWeek}</div><div class="sub">across 4 sessions</div></div>
+    <div class="card tight"><h3>PRs this month</h3><div class="big" style="font-size:24px">${gymTotals.prsThisMonth} 🏆</div><div class="sub">new 1RMs</div></div>
+  </div>
+
+  <div class="section-h"><h2>Current 1 Rep Max</h2><span class="muted" style="font-size:13px">Estimated from working sets (Epley)</span></div>
+  <div class="grid g4">${cards}</div>
+
+  <div class="section-h"><h2>Session log</h2><span class="muted" style="font-size:13px">Click a session for the full set log</span></div>
+  <div class="card tight"><div class="alist">${sessions}</div></div>`;
+}
+
+function viewGymSession(s){
+  const ex=s.exercises.map(e=>{
+    const best=e.sets.reduce((a,b)=>b[0]>a[0]?b:a,[0,0]);
+    const e1rm=Math.round(best[0]*(1+best[1]/30)); // Epley
+    const rows=e.sets.map((set,i)=>`<tr><td>${i+1}</td><td>${set[0]} kg</td><td>${set[1]}</td><td class="${e.pr&&i===0?'pr':''}">${Math.round(set[0]*(1+set[1]/30))} kg${e.pr&&i===0?' 🏆':''}</td></tr>`).join("");
+    return `<div class="card" style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <b style="font-size:15px">${e.name} ${e.pr?'<span class="tag main">PR</span>':''}</b>
+        <span class="muted" style="font-size:12px">Top est. 1RM <b style="color:var(--txt)">${e1rm} kg</b></span></div>
+      <table class="sets"><thead><tr><th>Set</th><th>Weight</th><th>Reps</th><th>Est. 1RM</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
+  }).join("");
+  return `
+  <button class="back" data-view="gym">← Back to sessions</button>
+  <div style="display:flex;align-items:center;gap:12px;margin:4px 0 16px;flex-wrap:wrap">
+    <div class="kpi-ic" style="width:44px;height:44px">${ic('gym',cssvar('--purple'))}</div>
+    <div><h2 style="margin:0">${s.title}</h2><div class="muted" style="font-size:13px">${s.date} · ${s.duration}</div></div>
+  </div>
+  <div class="grid g4">
+    <div class="card tight"><h3>Volume</h3><div class="big" style="font-size:22px">${(s.volume/1000).toFixed(1)} t</div><div class="sub">${s.tonnageNote}</div></div>
+    <div class="card tight"><h3>Total Sets</h3><div class="big" style="font-size:22px">${s.sets}</div></div>
+    <div class="card tight"><h3>Exercises</h3><div class="big" style="font-size:22px">${s.exercises.length}</div></div>
+    <div class="card tight"><h3>Duration</h3><div class="big" style="font-size:22px">${s.duration}</div></div>
+  </div>
+  <div class="section-h"><h2>Set log</h2></div>
+  ${ex}`;
+}
+
+function viewPlan(){
+  const done=liftPlan.filter(d=>d.done).length;
+  const days=liftPlan.map(d=>{
+    const tagClass=d.tag;
+    const items=d.items.map(it=>`<div class="ex"><span>${it[0]}</span><span class="pres">${it[1]}</span></div>`).join("");
+    return `<div class="day">
+      <div class="dh"><div>${d.day} <span class="tag ${tagClass}">${d.focus}</span></div>
+        <span class="tag ${d.done?'done':'todo'}">${d.done?'✓ Done':'Planned'}</span></div>
+      ${items}</div>`;
+  }).join("");
+  return `
+  <div class="grid g3">
+    <div class="card tight"><h3>Programme</h3><div class="big" style="font-size:22px">Marathon + Strength</div><div class="sub">Concurrent · 12-week block</div></div>
+    <div class="card tight"><h3>Week progress</h3><div class="big" style="font-size:22px">${done}/7 days</div><div class="bar" style="margin-top:8px"><i style="width:${Math.round(done/7*100)}%"></i></div></div>
+    <div class="card tight"><h3>Phase</h3><div class="big" style="font-size:22px">Build · Wk 7</div><div class="sub">Deload in 2 weeks</div></div>
+  </div>
+  <div class="section-h"><h2>This week</h2><span class="muted" style="font-size:13px">Auto-syncs completed lifts from Garmin</span></div>
+  <div class="grid g2">${days}</div>`;
+}
+
+function viewRehab(){
+  const r=rehabPlan;
+  const blocks=r.blocks.map(b=>{
+    const items=b.items.map(it=>`<div class="ex"><div><span>${it[0]}</span><br><small>${it[2]}</small></div><span class="pres">${it[1]}</span></div>`).join("");
+    return `<div class="day"><div class="dh"><div><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${cssvar(b.color)};margin-right:8px"></span>${b.name}</div></div>${items}</div>`;
+  }).join("");
+  return `
+  <div class="grid g3">
+    <div class="card tight"><h3>Focus area</h3><div class="big" style="font-size:20px">${r.area}</div><div class="sub">${r.phase}</div></div>
+    <div class="card tight"><h3>Adherence</h3><div class="big" style="font-size:22px">${r.adherence}%</div><div class="bar" style="margin-top:8px"><i style="width:${r.adherence}%;background:linear-gradient(90deg,var(--green),var(--green))"></i></div></div>
+    <div class="card tight"><h3>Pain (0–10)</h3><div class="big" style="font-size:22px">1 / 10</div><div class="sub">↓ from 4 at start</div></div>
+  </div>
+  <div class="section-h"><h2>Protocol</h2><span class="muted" style="font-size:13px">Built around your return-to-run timeline</span></div>
+  <div class="grid g3">${blocks}</div>
+  <div class="card" style="margin-top:16px">
+    <h3>Return-to-run progression</h3>
+    <div class="grid g4" style="margin-top:10px">
+      <div class="card tight" style="text-align:center"><div class="big" style="font-size:18px">Walk/Run</div><span class="tag done">Wk 1–2 ✓</span></div>
+      <div class="card tight" style="text-align:center"><div class="big" style="font-size:18px">Easy Z2</div><span class="tag done">Wk 3–4 ✓</span></div>
+      <div class="card tight" style="text-align:center"><div class="big" style="font-size:18px">Tempo</div><span class="tag main">Wk 5–6 ●</span></div>
+      <div class="card tight" style="text-align:center"><div class="big" style="font-size:18px">Full load</div><span class="tag todo">Wk 7+</span></div>
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   ROUTER
+   ========================================================================= */
+let current="overview";
+function render(view,payload){
+  current=view;
+  // nav highlight (only for top-level views)
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  const navLabels={overview:'Overview',running:'Running',gym:'Strength',plan:'Lift Plan',rehab:'Rehab'};
+  const top=titles[view]||titles[payload?.__parent]||["",""];
+  if(titles[view]){document.getElementById('pageTitle').textContent=top[0];document.getElementById('pageSub').textContent=top[1];}
+  let html="";
+  switch(view){
+    case "overview": html=viewOverview(); break;
+    case "running":  html=viewRunning(); break;
+    case "run":      html=viewRun(payload); document.getElementById('pageTitle').textContent="Activity"; document.getElementById('pageSub').textContent="Full run breakdown"; break;
+    case "gym":      html=viewGym(); break;
+    case "gymSession":html=viewGymSession(payload); document.getElementById('pageTitle').textContent="Session"; document.getElementById('pageSub').textContent="Strength session log"; break;
+    case "plan":     html=viewPlan(); break;
+    case "rehab":    html=viewRehab(); break;
+    default: html=viewOverview();
+  }
+  viewEl.innerHTML=html;
+  window.scrollTo({top:0,behavior:"instant"});
+  document.getElementById('side').classList.remove('open');
+}
+
+// nav labels (icons + text)
+(function setupNav(){
+  const labels=[["overview","Overview"],["running","Running"],["gym","Strength"],["plan","Lift Plan"],["rehab","Rehab"]];
+  document.querySelectorAll('#nav button').forEach((b,i)=>{
+    const [v,t]=labels[i]; b.dataset.view=v; b.innerHTML=ic(v)+`<span>${t}</span>`;
+  });
+})();
+
+// event delegation
+document.addEventListener('click',e=>{
+  const navBtn=e.target.closest('[data-view]');
+  if(navBtn){ render(navBtn.dataset.view); return; }
+  const act=e.target.closest('[data-activity]');
+  if(act){
+    const id=act.dataset.activity;
+    const run=runs.find(r=>r.id===id);
+    if(run){ render("run",run); return; }
+    const sess=gymSessions.find(g=>g.id===id);
+    if(sess){ render("gymSession",sess); return; }
+  }
+});
+document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('side').classList.toggle('open'));
+
+// live-ish sync clock
+(function tick(){const el=document.getElementById('syncTime');let m=0;setInterval(()=>{m++;el.textContent=m===1?'1 min ago':m+' min ago';},60000);})();
+
+render("overview");
+</script>
+</body>
+</html>
