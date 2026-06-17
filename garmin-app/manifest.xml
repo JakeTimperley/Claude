@@ -15,16 +15,9 @@
       type="watch-app"
       version="1.0.0">
     <iq:products>
-      <iq:product id="fr965"/>
-      <iq:product id="fr955"/>
+      <!-- Forerunner 265 (46 mm) and 265S (42 mm). Add more ids here if needed. -->
       <iq:product id="fr265"/>
-      <iq:product id="fenix7"/>
-      <iq:product id="fenix7x"/>
-      <iq:product id="fenix8"/>
-      <iq:product id="epix2"/>
-      <iq:product id="venu2"/>
-      <iq:product id="venu3"/>
-      <iq:product id="vivoactive5"/>
+      <iq:product id="fr265s"/>
     </iq:products>
     <iq:permissions>
       <iq:uses-permission id="FitContributor"/>

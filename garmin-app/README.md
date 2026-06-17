@@ -25,6 +25,28 @@ This one:
 
 ---
 
+## ⚡ Forerunner 265 quickstart (pre-configured)
+The manifest is already locked to **`fr265` / `fr265s`**, so there's nothing to edit.
+
+1. **VS Code → Extensions →** install **"Monkey C"** (by Garmin). Reload.
+2. Press **Ctrl+Shift+P** → run **`Monkey C: Verify Installation`**. Follow the
+   prompts to **download the SDK** and let it **generate a developer key**
+   (accept the defaults). One-time, ~2 min.
+3. **File → Open Folder →** select this `garmin-app` folder.
+4. Press **Ctrl+Shift+P** → **`Monkey C: Run App`**, choose **Forerunner 265** →
+   the **simulator** launches. Try it: START logs a set, UP/DOWN change weight,
+   MENU opens options. (No watch needed for this step.)
+5. To put it on the watch: **Ctrl+Shift+P** → **`Monkey C: Build for Device`**
+   (pick **Forerunner 265**) → it produces **`StrengthLog.prg`** (or similar)
+   in `bin/`.
+6. Plug the **FR265 in via USB**. It appears as a drive. Copy that `.prg` into
+   the watch's **`GARMIN/APPS/`** folder. Eject. The app is now in your
+   **Activities & Apps** list on the watch. 100% private — never touches the store.
+
+That's the whole thing. Everything below is reference detail.
+
+---
+
 ## Build it
 
 You need the **Connect IQ SDK** (free). Easiest route is the VS Code extension.
