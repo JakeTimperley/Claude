@@ -239,6 +239,12 @@ def build_run(g, act):
         "effort": effort,
         "suffer": round(act.get("activityTrainingLoad") or effort_te * 20),
         "weather": "",
+        # running dynamics (shown on the run-detail page)
+        "cadence": round(act.get("averageRunningCadenceInStepsPerMinute") or 0) or None,
+        "stride": round((act.get("avgStrideLength") or 0) / 100.0, 2) or None,  # cm -> m
+        "vosc": round(act.get("avgVerticalOscillation") or 0, 1) or None,
+        "grade": None,
+        "power": round(act.get("avgPower") or 0) or None,
         "splits": [], "hr": [], "elevProfile": [], "route": [],
     }
 

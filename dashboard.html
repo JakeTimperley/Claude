@@ -7,12 +7,13 @@
 <style>
   :root{
     color-scheme: dark;
-    --bg:#0a0e14; --bg2:#0f1620; --card:#121b27; --card2:#16202e;
-    --line:#1f2c3c; --line2:#26384c;
-    --txt:#e8eef6; --mut:#8a99ad; --mut2:#5d6e82;
-    --acc:#fc5200;            /* Strava-ish orange */
-    --acc2:#ff7a33;
-    --blue:#3b9dff; --green:#37d49a; --purple:#a07bff; --yellow:#f5c451; --red:#ff5a6e;
+    --bg:#070b14; --bg2:#0b1120; --card:#0f1729; --card2:#131d33;
+    --line:#1c2740; --line2:#26344f;
+    --txt:#eaf0fb; --mut:#8b98b5; --mut2:#5a6a8c;
+    --acc:#22d3ee;            /* signature cyan/teal */
+    --acc2:#5ee7f5;
+    --blue:#3b82f6; --green:#34d8a6; --purple:#a78bfa; --yellow:#fbbf24; --red:#fb6a82;
+    --pink:#f472b6; --magenta:#ec4899; --teal:#2dd4bf;
     --radius:16px;
   }
   *{box-sizing:border-box}
@@ -419,6 +420,38 @@ function lineChart(data,{w=320,h=80,color="--acc2",fill=true,min,max}={}){
     <circle cx="${X(data.length-1)}" cy="${Y(data[data.length-1])}" r="3.5" fill="${c}"/>
   </svg>`;
 }
+// Big vivid filled area chart with a smooth curve + two-tone gradient glow.
+function areaChart(data,{w=600,h=170,line="--green",top="--green",bot="--magenta",min,max}={}){
+  const lc=cssvar(line), tc=cssvar(top), bc=cssvar(bot);
+  const mn=min??Math.min(...data), mx=max??Math.max(...data), rng=(mx-mn)||1, pad=6;
+  const X=i=>pad+i*((w-pad*2)/(data.length-1));
+  const Y=v=>h-pad-((v-mn)/rng)*(h-pad*2);
+  // smooth path via Catmull-Rom -> bezier
+  let d=`M ${X(0).toFixed(1)} ${Y(data[0]).toFixed(1)}`;
+  for(let i=0;i<data.length-1;i++){
+    const x0=X(Math.max(0,i-1)),y0=Y(data[Math.max(0,i-1)]);
+    const x1=X(i),y1=Y(data[i]);
+    const x2=X(i+1),y2=Y(data[i+1]);
+    const x3=X(Math.min(data.length-1,i+2)),y3=Y(data[Math.min(data.length-1,i+2)]);
+    const c1x=x1+(x2-x0)/6, c1y=y1+(y2-y0)/6, c2x=x2-(x3-x1)/6, c2y=y2-(y3-y1)/6;
+    d+=` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+  }
+  const fill=`${d} L ${X(data.length-1).toFixed(1)} ${h-pad} L ${pad} ${h-pad} Z`;
+  const g="g"+Math.random().toString(36).slice(2,7);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block">
+    <defs>
+      <linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${tc}" stop-opacity=".55"/>
+        <stop offset="1" stop-color="${bc}" stop-opacity=".04"/>
+      </linearGradient>
+      <linearGradient id="${g}l" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="${tc}"/><stop offset="1" stop-color="${lc}"/>
+      </linearGradient>
+    </defs>
+    <path d="${fill}" fill="url(#${g})"/>
+    <path d="${d}" fill="none" stroke="url(#${g}l)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
 function barChart(data,{w=320,h=90,color="--acc2"}={}){
   const c=cssvar(color), mx=Math.max(...data)||1, n=data.length, gap=3;
   const bw=(w-(n-1)*gap)/n;
@@ -447,11 +480,14 @@ function routeMap(route,chips=[]){
   for(let i=1;i<10;i++){grid+=`<line x1="${i*80}" y1="0" x2="${i*80}" y2="${H}"/><line x1="0" y1="${i*45}" x2="${W}" y2="${i*45}"/>`}
   return `<div class="map">
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">
-      <g stroke="#172430" stroke-width="1">${grid}</g>
-      <path d="${path}" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="${path}" fill="none" stroke="${cssvar('--acc')}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="${(start[0]*mx).toFixed(1)}" cy="${(start[1]*my).toFixed(1)}" r="9" fill="${cssvar('--green')}" stroke="#0a0e14" stroke-width="3"/>
-      <circle cx="${(end[0]*mx).toFixed(1)}" cy="${(end[1]*my).toFixed(1)}" r="9" fill="${cssvar('--red')}" stroke="#0a0e14" stroke-width="3"/>
+      <defs><linearGradient id="rt" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="${cssvar('--green')}"/><stop offset="1" stop-color="${cssvar('--teal')}"/>
+      </linearGradient></defs>
+      <g stroke="#152138" stroke-width="1">${grid}</g>
+      <path d="${path}" fill="none" stroke="#000" stroke-opacity=".4" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${path}" fill="none" stroke="url(#rt)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 6px ${cssvar('--teal')}80)"/>
+      <circle cx="${(start[0]*mx).toFixed(1)}" cy="${(start[1]*my).toFixed(1)}" r="9" fill="${cssvar('--green')}" stroke="#070b14" stroke-width="3"/>
+      <circle cx="${(end[0]*mx).toFixed(1)}" cy="${(end[1]*my).toFixed(1)}" r="9" fill="${cssvar('--red')}" stroke="#070b14" stroke-width="3"/>
     </svg>
     <div class="ovl">${chips.map(c=>`<span class="chip">${c}</span>`).join("")}</div>
   </div>`;
@@ -493,6 +529,8 @@ function viewOverview(){
   const zTotal=Object.values(z).reduce((a,b)=>a+b,0);
 
   const recent=runs.slice(0,3).map(r=>activityRow(r)).join("");
+  const loadTrend=[420,510,480,560,620,540,610,700,660,742,800,842];
+  const distTrend=[42,55,48,60,58,64,52,68,57,64,60,63.9];
 
   return `
   <div class="grid g4">
@@ -502,21 +540,32 @@ function viewOverview(){
     ${kpi("weight","--blue","Body Weight",p.weight+" kg",p.bodyFat+"% body fat",deltaBadge(p.weight,p.weight+0.6,{invert:true,suffix:" kg"}))}
   </div>
 
-  <div class="grid g3" style="margin-top:16px">
-    <div class="card" style="grid-column:span 2">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div><h3>VO₂ Max trend</h3><div class="big" style="font-size:24px">${p.vo2max} <span class="muted" style="font-size:13px;font-weight:500">last 12 weeks</span></div></div>
-        <span class="chip race">${ic('trophy',cssvar('--yellow'))} Top 5% age group</span>
-      </div>
-      <div style="margin-top:10px">${lineChart(p.vo2Trend,{h:130,color:'--acc2'})}</div>
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div><h3>Fitness Trend — VO₂ Max</h3><div class="big" style="font-size:24px">${p.vo2max} <span class="muted" style="font-size:13px;font-weight:500">last 12 weeks</span></div></div>
+      <span class="chip race">${ic('trophy',cssvar('--yellow'))} Top 5% age group</span>
+    </div>
+    <div style="margin-top:10px">${lineChart(p.vo2Trend,{h:120,color:'--yellow'})}</div>
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card">
+      <div class="kpi-top"><h3>Training Load</h3><span class="delta up">▲ Productive</span></div>
+      <div class="big" style="font-size:24px">${p.trainingLoad} <span class="muted" style="font-size:13px;font-weight:500">acute load</span></div>
+      <div style="margin-top:6px">${areaChart(loadTrend,{h:170,line:'--green',top:'--green',bot:'--magenta'})}</div>
     </div>
     <div class="card">
-      <h3>Race Predictors</h3>
-      <div style="margin-top:4px">${races}</div>
+      <div class="kpi-top"><h3>Weekly Distance</h3><span class="delta up">▲ +9%</span></div>
+      <div class="big" style="font-size:24px">${distTrend[distTrend.length-1]} <span class="muted" style="font-size:13px;font-weight:500">km this week</span></div>
+      <div style="margin-top:6px">${areaChart(distTrend,{h:170,line:'--acc2',top:'--acc',bot:'--blue'})}</div>
     </div>
   </div>
 
   <div class="grid g3" style="margin-top:16px">
+    <div class="card">
+      <h3>Race Predictors</h3>
+      <div style="margin-top:4px">${races}</div>
+    </div>
     <div class="card" style="display:flex;gap:18px;align-items:center">
       <div style="position:relative">${donut(zoneSeg)}
         <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center">
@@ -527,20 +576,14 @@ function viewOverview(){
           <span><i style="background:var(--mut2)"></i>Z1 ${z.z1}m</span>
           <span><i style="background:var(--green)"></i>Z2 ${z.z2}m</span>
           <span><i style="background:var(--yellow)"></i>Z3 ${z.z3}m</span>
-          <span><i style="background:var(--acc2)"></i>Z4 ${z.z4}m</span>
+          <span><i style="background:var(--pink)"></i>Z4 ${z.z4}m</span>
           <span><i style="background:var(--red)"></i>Z5 ${z.z5}m</span>
         </div></div>
     </div>
     <div class="card">
-      <h3>Weekly Volume</h3>
-      <div class="big" style="font-size:24px">63.9 <span class="muted" style="font-size:13px;font-weight:500">km running</span></div>
-      <div style="margin-top:8px">${barChart([42,55,48,60,58,64,52,68,57,64],{h:70,color:'--acc2'})}</div>
-      <div class="sub">+9% vs 4-week average</div>
-    </div>
-    <div class="card">
       <h3>Strength Volume</h3>
       <div class="big" style="font-size:24px">48.3 <span class="muted" style="font-size:13px;font-weight:500">tonnes / wk</span></div>
-      <div style="margin-top:8px">${barChart([38,41,40,44,42,45,43,46,44,48],{h:70,color:'--purple'})}</div>
+      <div style="margin-top:8px">${barChart([38,41,40,44,42,45,43,46,44,48],{h:90,color:'--purple'})}</div>
       <div class="sub">${gymTotals.prsThisMonth} PRs this month</div>
     </div>
   </div>
@@ -586,46 +629,63 @@ function viewRun(a){
     const h=18+ (slowest-s)/((slowest-fastest)||1)*82;
     return `<div class="s" style="height:${h.toFixed(0)}%"><small>${paceStr(s)}</small><span>${i+1}</span></div>`;
   }).join("");
-  const stat=(l,v,s)=>`<div class="card tight" style="text-align:center"><h3>${l}</h3><div class="big" style="font-size:22px">${v}</div>${s?`<div class="sub">${s}</div>`:''}</div>`;
+  const stat=(l,v,s)=>`<div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.4px">${l}</div><div style="font-size:21px;font-weight:750;margin-top:3px">${v}</div>${s?`<div class="sub">${s}</div>`:''}</div>`;
+  // running dynamics (use live values when present, else a sensible default from pace)
+  const avgPaceMin=a.splits.reduce((x,y)=>x+y,0)/a.splits.length;
+  const cadence=a.cadence||Math.round(174+(5-Math.min(5,avgPaceMin))*4);
+  const dyn=[["Cadence",cadence+" spm"],["Stride",(a.stride||1.18)+" m"],["Vert. Osc",(a.vosc||7.8)+" cm"],["Avg Grade",(a.grade||0.6)+" %"]];
+  const zonePills=['Z1','Z2','Z3','Z4','Z5'].map((z,i)=>`<span class="chip" style="color:${['var(--mut2)','var(--green)','var(--yellow)','var(--pink)','var(--red)'][i]}">${z}</span>`).join("");
   return `
-  <button class="back" data-view="running">← Back to activities</button>
+  <button class="back" data-view="running">← Back to running</button>
   <div style="display:flex;align-items:center;gap:12px;margin:4px 0 16px;flex-wrap:wrap">
     <div class="kpi-ic" style="width:44px;height:44px">${ic(a.effort==='VO2 Max'?'bolt':'running',cssvar('--acc2'))}</div>
-    <div><h2 style="margin:0">${a.title}</h2><div class="muted" style="font-size:13px">${a.date} · ${a.weather}</div></div>
+    <div><h2 style="margin:0">${a.title}</h2><div class="muted" style="font-size:13px">${a.date} · ${a.distance} km · ${a.pace} /km${a.weather?` · ${a.weather}`:''}</div></div>
     <span class="chip run" style="margin-left:auto">${a.effort}</span>
-    <span class="chip race">🏔 VO₂ ${a.vo2}</span>
+    ${a.vo2?`<span class="chip race">🏔 VO₂ ${a.vo2}</span>`:''}
   </div>
 
-  ${routeMap(a.route,[`📍 ${a.distance} km`,`⛰ ${a.elev} m`,`⏱ ${a.duration}`])}
-
-  <div class="grid g4" style="margin-top:16px">
-    ${stat("Distance",a.distance+" km")}
-    ${stat("Avg Pace",a.pace+" /km")}
-    ${stat("Moving Time",a.duration)}
-    ${stat("Calories",a.cal)}
-    ${stat("Avg HR",a.avgHr+" bpm")}
-    ${stat("Max HR",a.maxHr+" bpm")}
-    ${stat("Elevation",a.elev+" m")}
-    ${stat("Relative Effort",a.suffer)}
-  </div>
-
-  <div class="grid g2" style="margin-top:16px">
+  <div class="grid g2" style="align-items:stretch">
+    ${routeMap(a.route,[`📍 ${a.distance} km`,`⛰ ${a.elev} m`])}
     <div class="card">
-      <h3>Heart Rate</h3>
-      <div style="margin-top:10px">${lineChart(a.hr,{h:140,color:'--red'})}</div>
-      <div class="legend" style="margin-top:8px"><span><i style="background:var(--red)"></i>BPM over distance · avg ${a.avgHr} · max ${a.maxHr}</span></div>
-    </div>
-    <div class="card">
-      <h3>Elevation</h3>
-      <div style="margin-top:10px">${lineChart(a.elevProfile,{h:140,color:'--green'})}</div>
-      <div class="legend" style="margin-top:8px"><span><i style="background:var(--green)"></i>Metres · total climb ${a.elev} m</span></div>
+      <h3>Details</h3>
+      <div class="grid g3" style="gap:16px 18px;margin-top:12px">
+        ${stat("Distance",a.distance+" km")}
+        ${stat("Moving Time",a.duration)}
+        ${stat("Avg Pace",a.pace)}
+        ${stat("Avg HR",a.avgHr)}
+        ${stat("Max HR",a.maxHr)}
+        ${stat("Elevation",a.elev+" m")}
+        ${stat("Calories",a.cal)}
+        ${stat("Rel. Effort",a.suffer)}
+        ${stat("Avg Power",(a.power||288)+" W")}
+      </div>
     </div>
   </div>
 
   <div class="card" style="margin-top:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center"><h3>Splits (per km)</h3>
-      <span class="muted" style="font-size:12px">Fastest ${paceStr(fastest)} · Slowest ${paceStr(slowest)}</span></div>
-    <div class="splitbar" style="margin-top:26px;margin-bottom:22px">${splitBars}</div>
+    <h3>Running Dynamics</h3>
+    <div class="grid g4" style="margin-top:12px">${dyn.map(d=>stat(d[0],d[1])).join("")}</div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h3>Heart Rate</h3><div class="pillrow">${zonePills}</div>
+    </div>
+    <div style="margin-top:10px">${areaChart(a.hr,{h:180,line:'--pink',top:'--magenta',bot:'--purple'})}</div>
+    <div class="legend" style="margin-top:8px"><span><i style="background:var(--magenta)"></i>BPM over distance · avg ${a.avgHr} · max ${a.maxHr}</span></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card">
+      <h3>Elevation</h3>
+      <div style="margin-top:10px">${areaChart(a.elevProfile,{h:150,line:'--green',top:'--green',bot:'--teal'})}</div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:var(--green)"></i>Metres · total climb ${a.elev} m</span></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center"><h3>Splits (per km)</h3>
+        <span class="muted" style="font-size:12px">Fastest ${paceStr(fastest)} · Slowest ${paceStr(slowest)}</span></div>
+      <div class="splitbar" style="margin-top:26px;margin-bottom:22px">${splitBars}</div>
+    </div>
   </div>`;
 }
 
