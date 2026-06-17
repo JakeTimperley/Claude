@@ -197,13 +197,16 @@
   </main>
 </div>
 
+<script src="garmin-data.js"></script>
 <script>
 /* =========================================================================
    DATA LAYER
    Shaped to mirror Garmin Connect / Strava payloads so a live API can drop
-   in later. All values below are sample data (no network access in sandbox).
+   in later. The values below are SAMPLE data used as a fallback; if
+   garmin-data.js is present (produced by fetch_garmin.py) its window.GARMIN_DATA
+   overrides them. No network access is needed at runtime.
    ========================================================================= */
-const profile = {
+let profile = {
   name:"Athlete", initials:"JT",
   vo2max:58, vo2maxPrev:56, vo2Trend:[52,53,53,54,55,55,56,56,57,57,58,58],
   restingHr:46, restingHrPrev:48,
@@ -212,7 +215,7 @@ const profile = {
   hrZones:{z1:62,z2:138,z3:62,z4:24,z5:8} // minutes this week
 };
 
-const racePredictors = [
+let racePredictors = [
   {dist:"5K",     time:"18:42", pace:"3:44 /km", trend:"-0:09"},
   {dist:"10K",    time:"39:05", pace:"3:55 /km", trend:"-0:21"},
   {dist:"Half",   time:"1:26:40", pace:"4:06 /km", trend:"-0:48"},
@@ -234,7 +237,7 @@ function makeRoute(seed, points, spread){
   return pts;
 }
 
-const runs = [
+let runs = [
   { id:"r1", title:"Morning Threshold", type:"run", date:"Today · 6:42 AM",
     distance:14.2, duration:"58:11", pace:"4:06", avgHr:162, maxHr:178, elev:142, cal:986,
     vo2:58, effort:"Tempo", suffer:74, weather:"12°C · Clear",
@@ -265,7 +268,7 @@ const runs = [
     route:makeRoute(51,24,4) },
 ];
 
-const oneRepMax = [
+let oneRepMax = [
   {lift:"Back Squat",  current:185, prev:180, goal:200, unit:"kg", color:"--acc2",
    history:[150,155,160,162,168,170,172,175,178,180,182,185]},
   {lift:"Deadlift",    current:220, prev:215, goal:240, unit:"kg", color:"--purple",
@@ -276,13 +279,13 @@ const oneRepMax = [
    history:[60,62,64,66,68,70,72,73,75,76,77,80]},
 ];
 
-const gymTotals = {
+let gymTotals = {
   sessions:96, sessionsThisMonth:14,
   volumeWeek:48250, volumeWeekPrev:44100, // kg lifted
   setsWeek:184, prsThisMonth:5
 };
 
-const gymSessions = [
+let gymSessions = [
   { id:"g1", title:"Lower — Squat Focus", type:"gym", date:"Today · 12:30 PM",
     duration:"1:08", volume:14820, sets:22, tonnageNote:"+6% vs last",
     exercises:[
@@ -352,6 +355,25 @@ const rehabPlan = {
     ]},
   ]
 };
+
+/* -------------------------------------------------------------------------
+   LIVE DATA OVERRIDE
+   fetch_garmin.py writes garmin-data.js -> window.GARMIN_DATA. Anything it
+   provides replaces the sample data above. liftPlan and rehabPlan stay
+   user-defined (Garmin has no concept of your custom programmes), but can be
+   overridden too if present.
+   ------------------------------------------------------------------------- */
+if (typeof window !== "undefined" && window.GARMIN_DATA) {
+  const g = window.GARMIN_DATA;
+  if (g.profile)        profile        = Object.assign(profile, g.profile);
+  if (g.racePredictors) racePredictors = g.racePredictors;
+  if (g.runs)           runs           = g.runs;
+  if (g.oneRepMax)      oneRepMax      = g.oneRepMax;
+  if (g.gymTotals)      gymTotals      = Object.assign(gymTotals, g.gymTotals);
+  if (g.gymSessions)    gymSessions    = g.gymSessions;
+  if (Array.isArray(g.liftPlan))  liftPlan.splice(0, liftPlan.length, ...g.liftPlan);
+  if (g.rehabPlan)      Object.assign(rehabPlan, g.rehabPlan);
+}
 
 /* =========================================================================
    ICONS (inline SVG, no external deps)

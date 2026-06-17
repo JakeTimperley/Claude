@@ -1,0 +1,8 @@
+# Secrets & personal data — never commit
+.env
+garmin-data.js          # your real Garmin data (dashboard falls back to sample data without it)
+
+# Python
+.venv/
+__pycache__/
+*.pyc
