@@ -134,10 +134,11 @@ def connect():
                    prompt_mfa=lambda: input("MFA code: ").strip())
         g.login()
         try:
+            os.makedirs(TOKEN_STORE, exist_ok=True)
             g.garth.dump(TOKEN_STORE)
-            print(f"Token cached at {TOKEN_STORE} (future runs skip login).")
-        except Exception:
-            pass
+            print(f"Token cached at {TOKEN_STORE} (future runs skip login -> no more 429).")
+        except Exception as e:
+            print(f"  (could not cache token: {e})")
         return g
     except Exception as e:
         if "429" in str(e):
