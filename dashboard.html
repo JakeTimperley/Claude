@@ -137,6 +137,26 @@
   .hovertip{position:fixed;pointer-events:none;background:#0b1120;border:1px solid var(--line2);border-radius:8px;padding:5px 9px;font-size:12px;font-weight:600;white-space:nowrap;transform:translate(-50%,-130%);opacity:0;transition:opacity .08s;z-index:60}
   .hovertip small{color:var(--mut);font-weight:500}
 
+  /* heatmap */
+  .heat{display:flex;gap:3px;overflow-x:auto;padding-bottom:4px}
+  .heat .wk{display:flex;flex-direction:column;gap:3px}
+  .heat .d{width:14px;height:14px;border-radius:3px;background:#121d33;cursor:pointer}
+  .heat .d:hover{outline:2px solid var(--acc2);outline-offset:1px}
+  .heatscale{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mut);margin-top:8px}
+  .heatscale .d{width:12px;height:12px;border-radius:3px}
+
+  /* gauge */
+  .gauge{position:relative;width:100%;max-width:230px;margin:0 auto}
+  .gauge .val{position:absolute;left:0;right:0;bottom:8px;text-align:center}
+  .gauge .val b{font-size:30px;font-weight:800;display:block;line-height:1}
+  .gauge .val small{color:var(--mut);font-size:11px}
+
+  /* header refresh button */
+  .iconbtn{display:inline-grid;place-items:center;height:40px;padding:0 14px;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--txt);font-weight:600;font-size:13px;gap:7px;grid-auto-flow:column}
+  .iconbtn:hover{border-color:var(--line2);background:var(--card2)}
+  .iconbtn.spin svg{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
   .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 
   /* plan */
@@ -180,6 +200,7 @@
     <nav class="nav" id="nav">
       <button data-view="overview" class="active"></button>
       <button data-view="running"></button>
+      <button data-view="trends"></button>
       <button data-view="gym"></button>
       <button data-view="plan"></button>
       <button data-view="rehab"></button>
@@ -202,9 +223,15 @@
           <p id="pageSub">Your week at a glance</p>
         </div>
       </div>
-      <div class="avatar">
-        <div class="ph" id="avi">JT</div>
-        <div class="nm">Athlete<small id="aviSub">Marathon block · Wk 7</small></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="iconbtn" id="refreshBtn" title="Refresh data">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 7"/><path d="M21 3v4h-4"/></svg>
+          <span>Refresh</span>
+        </button>
+        <div class="avatar">
+          <div class="ph" id="avi">JT</div>
+          <div class="nm">Athlete<small id="aviSub">Marathon block · Wk 7</small></div>
+        </div>
       </div>
     </div>
     <div id="view"></div>
@@ -377,9 +404,30 @@ const rehabPlan = {
    user-defined (Garmin has no concept of your custom programmes), but can be
    overridden too if present.
    ------------------------------------------------------------------------- */
+// Daily activity log — powers the heatmap, Trends, Records and ACWR. Sample
+// data is generated deterministically; replaced by g.activityLog when live.
+function genSampleLog(){
+  const out=[], today=new Date(); let seed=11;
+  const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280;};
+  for(let d=125; d>=0; d--){
+    const date=new Date(today); date.setDate(today.getDate()-d);
+    if(rnd()<0.60){
+      const gym=rnd()<0.3;
+      const dist=gym?0:+(5+rnd()*25).toFixed(1);
+      out.push({date:date.toISOString().slice(0,10), type:gym?'gym':'run',
+        distanceKm:dist, durationSec:Math.round((gym?50:dist*5.2)*60),
+        load:Math.round(gym?45+rnd()*55:dist*7+rnd()*25),
+        avgHr:Math.round(132+rnd()*38), elev:Math.round(dist*rnd()*22)});
+    }
+  }
+  return out;
+}
+let activityLog = genSampleLog();
+
 let updatedAt = null;
 function applyData(g){
   if (!g) return false;
+  if (Array.isArray(g.activityLog) && g.activityLog.length) activityLog = g.activityLog;
   if (g.profile)        profile        = Object.assign({}, profile, g.profile);
   if (g.racePredictors) racePredictors = g.racePredictors;
   if (g.runs)           runs           = g.runs;
@@ -406,6 +454,7 @@ const I = {
   heart:'<path d="M12 21s-7-4.35-9.5-8.5C.5 9 2 5.5 5.5 5.5c2 0 3 1 3.5 2 .5-1 1.5-2 3.5-2C16 5.5 17.5 9 15.5 12.5 13 16.65 12 21 12 21z"/>',
   fire:'<path d="M12 2c1 3-1 4-1 6a3 3 0 0 0 6 0c0-1 0-2-1-3 3 2 5 5 5 9a8 8 0 1 1-16 0c0-4 3-7 4-9 1 2 2 2 3-3z"/>',
   trend:'<path d="M3 17l6-6 4 4 8-8M21 7h-5M21 7v5"/>',
+  trends:'<path d="M3 3v18h18M7 14l3-4 4 3 5-7"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   trophy:'<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0zM7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"/>',
   mountain:'<path d="M3 20 10 7l4 7 2-3 5 9z"/>',
@@ -531,6 +580,109 @@ function hrZonesFor(maxHr){
           {label:"Z5",bpm:Math.round(m*.95),color:"--red"}];
 }
 function zoneOf(bpm,zones){ let z="Z1"; zones.forEach(t=>{ if(bpm>=t.bpm) z=t.label; }); return z; }
+
+/* =========================================================================
+   ANALYTICS HELPERS (heatmap, weekly aggregation, ACWR, records)
+   ========================================================================= */
+const DAY=86400000;
+function ymd(d){ return d.toISOString().slice(0,10); }
+function logByDate(){ const m={}; activityLog.forEach(a=>{ (m[a.date]=m[a.date]||[]).push(a); }); return m; }
+
+// GitHub-style training heatmap: `weeks` columns (Mon–Sun rows), colored by daily load.
+function heatmap(weeks=17){
+  const by=logByDate();
+  const today=new Date(); today.setHours(0,0,0,0);
+  // back up to the most recent Sunday so columns are whole weeks
+  const end=new Date(today); end.setDate(end.getDate()+(7-end.getDay())%7);
+  const start=new Date(end); start.setDate(start.getDate()-weeks*7+1);
+  let maxLoad=1; activityLog.forEach(a=>{ maxLoad=Math.max(maxLoad,a.load||0); });
+  const shade=v=>{ if(!v) return "#121d33";
+    const t=Math.min(1,v/(maxLoad*0.9)); const a=(0.18+0.82*t).toFixed(2);
+    return `rgba(45,212,191,${a})`; };
+  let cols="";
+  for(let w=0; w<weeks; w++){
+    let cells="";
+    for(let dch=0; dch<7; dch++){
+      const dt=new Date(start); dt.setDate(start.getDate()+w*7+dch);
+      const key=ymd(dt), acts=by[key]||[];
+      const load=acts.reduce((s,a)=>s+(a.load||0),0);
+      const dist=acts.reduce((s,a)=>s+(a.distanceKm||0),0);
+      const future=dt>today;
+      const tip = future ? "" :
+        `${dt.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}` +
+        (acts.length?` · <small>${dist?dist.toFixed(1)+' km · ':''}load ${load}</small>`:` · <small>rest</small>`);
+      cells+=`<div class="d" ${tip?`data-tip="${tip}"`:''} style="background:${future?'transparent':shade(load)}"></div>`;
+    }
+    cols+=`<div class="wk">${cells}</div>`;
+  }
+  return `<div class="heat">${cols}</div>
+    <div class="heatscale"><span>Less</span>
+      <div class="d" style="background:#121d33"></div>
+      <div class="d" style="background:rgba(45,212,191,.3)"></div>
+      <div class="d" style="background:rgba(45,212,191,.6)"></div>
+      <div class="d" style="background:rgba(45,212,191,.9)"></div>
+      <span>More</span></div>`;
+}
+
+// weekly aggregation of the log -> [{week, dist, load, count, paceMin}]
+function weekly(nWeeks=12){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const monday=new Date(today); monday.setDate(today.getDate()-((today.getDay()+6)%7));
+  const buckets=[];
+  for(let i=nWeeks-1;i>=0;i--){
+    const ws=new Date(monday); ws.setDate(monday.getDate()-i*7);
+    const we=new Date(ws); we.setDate(ws.getDate()+7);
+    let dist=0,load=0,count=0,dur=0,rdist=0;
+    activityLog.forEach(a=>{ const d=new Date(a.date);
+      if(d>=ws&&d<we){ dist+=a.distanceKm||0; load+=a.load||0; count++;
+        if(a.type==='run'){ dur+=a.durationSec||0; rdist+=a.distanceKm||0; } }});
+    buckets.push({label:ws.toLocaleDateString(undefined,{day:'numeric',month:'short'}),
+      dist:+dist.toFixed(1), load:Math.round(load), count,
+      paceMin: rdist? (dur/60)/rdist : 0});
+  }
+  return buckets;
+}
+
+// Acute:Chronic Workload Ratio — acute = last 7d load, chronic = avg weekly over 28d
+function acwr(){
+  const now=Date.now(); let acute=0, chronic=0;
+  activityLog.forEach(a=>{ const age=(now-new Date(a.date).getTime())/DAY;
+    if(age<7) acute+=a.load||0;
+    if(age<28) chronic+=a.load||0; });
+  chronic=chronic/4;
+  const ratio = chronic? acute/chronic : 0;
+  let band,col;
+  if(ratio<0.8){ band="Undertraining"; col="--blue"; }
+  else if(ratio<=1.3){ band="Optimal"; col="--green"; }
+  else if(ratio<=1.5){ band="Caution"; col="--yellow"; }
+  else { band="High risk"; col="--red"; }
+  return {ratio:+ratio.toFixed(2), acute:Math.round(acute), chronic:Math.round(chronic), band, col};
+}
+
+function records(){
+  const runsLog=activityLog.filter(a=>a.type==='run'&&a.distanceKm>0);
+  const longest=runsLog.reduce((m,a)=>a.distanceKm>(m?.distanceKm||0)?a:m,null);
+  const climb=runsLog.reduce((m,a)=>(a.elev||0)>(m?.elev||0)?a:m,null);
+  const longestT=runsLog.reduce((m,a)=>(a.durationSec||0)>(m?.durationSec||0)?a:m,null);
+  const fastest=runsLog.filter(a=>a.distanceKm>=3)
+    .reduce((m,a)=>{ const p=(a.durationSec/60)/a.distanceKm; return p<(m?.p||1e9)?{...a,p}:m; },null);
+  const wk=weekly(20).reduce((m,w)=>w.dist>(m?.dist||0)?w:m,null);
+  return {longest,climb,longestT,fastest,bigWeek:wk};
+}
+
+// gauge: semicircle dial 0..2 for ACWR
+function acwrGauge(a){
+  const W=240,H=140,cx=120,cy=125,r=100, max=2;
+  const ang=Math.PI*(1 - Math.min(max,a.ratio)/max);     // pi..0
+  const px=cx+r*Math.cos(ang), py=cy-r*Math.sin(ang);
+  const arc=(from,to,col)=>{ const a0=Math.PI*(1-from/max),a1=Math.PI*(1-to/max);
+    const x0=cx+r*Math.cos(a0),y0=cy-r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy-r*Math.sin(a1);
+    return `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${r} ${r} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${cssvar(col)}" stroke-width="12" stroke-linecap="round" opacity=".85"/>`; };
+  return `<div class="gauge"><svg viewBox="0 0 ${W} ${H}" style="width:100%">
+      ${arc(0,0.8,'--blue')}${arc(0.8,1.3,'--green')}${arc(1.3,1.5,'--yellow')}${arc(1.5,2,'--red')}
+      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="#fff"/>
+    </svg><div class="val"><b style="color:${cssvar(a.col)}">${a.ratio.toFixed(2)}</b><small>${a.band} · acute ${a.acute} / chronic ${a.chronic}</small></div></div>`;
+}
 function barChart(data,{w=320,h=90,color="--acc2"}={}){
   const c=cssvar(color), mx=Math.max(...data)||1, n=data.length, gap=3;
   const bw=(w-(n-1)*gap)/n;
@@ -549,15 +701,18 @@ function donut(segments,{size=120,thick=14}={}){
 /* =========================================================================
    ROUTE MAP
    ========================================================================= */
-function routeMap(route,chips=[]){
+let ROUTES={};
+function routeMap(route,chips=[],meta={}){
   // map 0..100 coords to a 800x450 viewbox
   const W=800,H=450, mx=W/100, my=H/100;
   const path=route.map((p,i)=>`${i?'L':'M'}${(p[0]*mx).toFixed(1)} ${(p[1]*my).toFixed(1)}`).join(" ");
   const start=route[0], end=route[route.length-1];
+  const id="rt_"+Math.random().toString(36).slice(2,8);
+  ROUTES[id]={route,meta,W,H,mx,my};
   // faint grid to read as a map
   let grid="";
   for(let i=1;i<10;i++){grid+=`<line x1="${i*80}" y1="0" x2="${i*80}" y2="${H}"/><line x1="0" y1="${i*45}" x2="${W}" y2="${i*45}"/>`}
-  return `<div class="map">
+  return `<div class="map" data-route="${id}">
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice">
       <defs><linearGradient id="rt" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="${cssvar('--green')}"/><stop offset="1" stop-color="${cssvar('--teal')}"/>
@@ -567,9 +722,39 @@ function routeMap(route,chips=[]){
       <path d="${path}" fill="none" stroke="url(#rt)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 6px ${cssvar('--teal')}80)"/>
       <circle cx="${(start[0]*mx).toFixed(1)}" cy="${(start[1]*my).toFixed(1)}" r="9" fill="${cssvar('--green')}" stroke="#070b14" stroke-width="3"/>
       <circle cx="${(end[0]*mx).toFixed(1)}" cy="${(end[1]*my).toFixed(1)}" r="9" fill="${cssvar('--red')}" stroke="#070b14" stroke-width="3"/>
+      <circle class="rt-dot" cx="0" cy="0" r="8" fill="#fff" opacity="0"/>
     </svg>
     <div class="ovl">${chips.map(c=>`<span class="chip">${c}</span>`).join("")}</div>
+    <div class="ic-tip rt-tip"></div>
   </div>`;
+}
+function wireRoutes(){
+  document.querySelectorAll('[data-route]').forEach(el=>{
+    const cfg=ROUTES[el.getAttribute('data-route')]; if(!cfg) return;
+    const {route,meta,W,H,mx,my}=cfg;
+    const svg=el.querySelector('svg'), dot=el.querySelector('.rt-dot'), tip=el.querySelector('.rt-tip');
+    const move=ev=>{
+      const r=svg.getBoundingClientRect();
+      const cx=('touches'in ev&&ev.touches[0]?ev.touches[0].clientX:ev.clientX)-r.left;
+      const cy=('touches'in ev&&ev.touches[0]?ev.touches[0].clientY:ev.clientY)-r.top;
+      // viewBox uses slice scaling: scale = max(r.w/W, r.h/H), centered
+      const sc=Math.max(r.width/W,r.height/H);
+      const vx=(cx-(r.width-W*sc)/2)/sc, vy=(cy-(r.height-H*sc)/2)/sc;
+      let best=0,bd=1e18;
+      route.forEach((p,i)=>{ const dx=p[0]*mx-vx, dy=p[1]*my-vy, d=dx*dx+dy*dy; if(d<bd){bd=d;best=i;} });
+      const p=route[best], frac=best/(route.length-1);
+      dot.setAttribute('cx',(p[0]*mx).toFixed(1)); dot.setAttribute('cy',(p[1]*my).toFixed(1)); dot.setAttribute('opacity','1');
+      const km=meta.dist?(frac*meta.dist).toFixed(2)+' km':'';
+      const hr=(meta.hr&&meta.hr.length)?meta.hr[Math.round(frac*(meta.hr.length-1))]+' bpm':'';
+      tip.innerHTML=[km,hr].filter(Boolean).map((t,i)=>i?`<small>${t}</small>`:t).join(' · ')||'—';
+      tip.style.left=(p[0]*mx*sc+(r.width-W*sc)/2)+'px';
+      tip.style.top=(p[1]*my*sc+(r.height-H*sc)/2)+'px';
+      tip.style.opacity=1;
+    };
+    const hide=()=>{dot.setAttribute('opacity','0'); tip.style.opacity=0;};
+    el.onmousemove=move; el.onmouseleave=hide;
+    el.ontouchstart=move; el.ontouchmove=ev=>{ev.preventDefault();move(ev);}; el.ontouchend=hide;
+  });
 }
 
 /* =========================================================================
@@ -589,7 +774,7 @@ function deltaBadge(cur,prev,{invert=false,suffix=""}={}){
    VIEWS
    ========================================================================= */
 const viewEl=document.getElementById('view');
-const titles={overview:["Overview","Your week at a glance"],running:["Running","Activities, fitness & race readiness"],
+const titles={overview:["Overview","Your week at a glance"],running:["Running","Activities, fitness & race readiness"],trends:["Trends","Fitness over time"],
   gym:["Strength","1RM tracking, volume & session logs"],plan:["Lift Plan","Current weekly programme"],rehab:["Rehab","Prehab & return-to-run protocol"]};
 
 function viewOverview(){
@@ -670,9 +855,50 @@ function viewOverview(){
     </div>
   </div>
 
+  <div class="section-h"><h2>Training calendar</h2><span class="muted" style="font-size:13px">Daily load · last 17 weeks</span></div>
+  <div class="grid" style="grid-template-columns:2fr 1fr;gap:16px">
+    <div class="card"><h3>Consistency</h3><div style="margin-top:12px">${heatmap(17)}</div></div>
+    <div class="card"><h3>Workload balance</h3>
+      <div style="margin-top:8px">${acwrGauge(acwr())}</div>
+      <div class="sub" style="margin-top:6px">Acute:chronic load ratio. Stay in the <span style="color:var(--green)">green zone (0.8–1.3)</span> to build fitness while limiting injury risk.</div>
+    </div>
+  </div>
+
   <div class="section-h"><h2>Recent activity</h2><a class="link" data-view="running" role="button">View all →</a></div>
   <div class="card tight"><div class="alist">${recent}</div></div>
   `;
+}
+
+function viewTrends(){
+  const wk=weekly(12);
+  const dist=wk.map(w=>w.dist), load=wk.map(w=>w.load), pace=wk.map(w=>w.paceMin||0);
+  const totDist=dist.reduce((a,b)=>a+b,0), avgWk=(totDist/wk.length).toFixed(1);
+  const paceValid=pace.filter(p=>p>0);
+  const lastPace=paceValid.length?paceValid[paceValid.length-1]:0;
+  const stat=(l,v,s)=>`<div class="card tight"><h3>${l}</h3><div class="big" style="font-size:24px">${v}</div>${s?`<div class="sub">${s}</div>`:''}</div>`;
+  return `
+  <div class="grid g4">
+    ${stat("12-wk distance",totDist.toFixed(0)+" km","avg "+avgWk+" km/wk")}
+    ${stat("VO₂ Max",profile.vo2max,deltaBadge(profile.vo2max,profile.vo2maxPrev))}
+    ${stat("Resting HR",profile.restingHr+" bpm",deltaBadge(profile.restingHr,profile.restingHrPrev,{invert:true}))}
+    ${stat("Avg pace",lastPace?paceStr(lastPace)+" /km":"—","recent weeks")}
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><div class="kpi-top"><h3>Weekly Distance</h3><span class="muted" style="font-size:12px">km</span></div>
+      <div style="margin-top:8px">${interactiveChart(dist,{h:170,line:'--acc2',top:'--acc',bot:'--blue',
+        fmt:(i,v)=>`${v} <small>km · ${wk[i].label}</small>`})}</div></div>
+    <div class="card"><div class="kpi-top"><h3>Weekly Training Load</h3><span class="muted" style="font-size:12px">acute</span></div>
+      <div style="margin-top:8px">${interactiveChart(load,{h:170,line:'--green',top:'--green',bot:'--magenta',
+        fmt:(i,v)=>`${v} <small>load · ${wk[i].label}</small>`})}</div></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><div class="kpi-top"><h3>VO₂ Max</h3><span class="chip race">${ic('trophy',cssvar('--yellow'))} Superior</span></div>
+      <div style="margin-top:8px">${interactiveChart(profile.vo2Trend,{h:160,line:'--yellow',top:'--yellow',bot:'--yellow',
+        fmt:(i,v)=>`${v} <small>VO₂ max</small>`})}</div></div>
+    <div class="card"><div class="kpi-top"><h3>Avg Pace by week</h3><span class="muted" style="font-size:12px">lower is faster</span></div>
+      <div style="margin-top:8px">${interactiveChart(pace.map(p=>p||lastPace||5),{h:160,line:'--pink',top:'--pink',bot:'--purple',
+        fmt:(i,v)=>`${paceStr(v)} <small>/km · ${wk[i].label}</small>`})}</div></div>
+  </div>`;
 }
 
 function activityRow(a){
@@ -701,8 +927,25 @@ function viewRunning(){
     <div class="card tight"><h3>Avg VO₂ Max</h3><div class="big" style="font-size:24px">${profile.vo2max}</div><div class="sub">trending up</div></div>
     <div class="card tight"><h3>Marathon ready</h3><div class="big" style="font-size:24px">3:02</div><div class="sub">predicted finish</div></div>
   </div>
+  <div class="section-h"><h2>Personal records</h2><span class="muted" style="font-size:13px">From your activity history</span></div>
+  <div class="grid g4">${recordCards()}</div>
+
   <div class="section-h"><h2>Activities</h2><span class="muted" style="font-size:13px">Click a run for the full breakdown</span></div>
   <div class="card tight"><div class="alist">${list}</div></div>`;
+}
+
+function recordCards(){
+  const r=records();
+  const card=(icn,col,label,val,sub)=>`<div class="card tight">
+    <div class="kpi-top"><div class="kpi-ic">${ic(icn,cssvar(col))}</div></div>
+    <h3 style="margin-top:12px">${label}</h3><div class="big" style="font-size:24px">${val}</div><div class="sub">${sub||""}</div></div>`;
+  const dstr=d=>d?new Date(d.date).toLocaleDateString(undefined,{day:'numeric',month:'short'}):"—";
+  const out=[];
+  out.push(card("mountain","--acc2","Longest run", r.longest?r.longest.distanceKm+" km":"—", dstr(r.longest)));
+  if(r.fastest) out.push(card("bolt","--pink","Fastest pace", paceStr((r.fastest.durationSec/60)/r.fastest.distanceKm)+" /km", `${r.fastest.distanceKm} km · ${dstr(r.fastest)}`));
+  out.push(card("trend","--green","Biggest week", r.bigWeek?r.bigWeek.dist+" km":"—", r.bigWeek?("wk of "+r.bigWeek.label):""));
+  out.push(card("mountain","--yellow","Most climb", r.climb?(r.climb.elev||0)+" m":"—", dstr(r.climb)));
+  return out.join("");
 }
 
 function viewRun(a){
@@ -730,7 +973,7 @@ function viewRun(a){
   </div>
 
   <div class="grid g2" style="align-items:stretch">
-    ${routeMap(a.route,[`📍 ${a.distance} km`,`⛰ ${a.elev} m`])}
+    ${routeMap(a.route,[`📍 ${a.distance} km`,`⛰ ${a.elev} m`],{dist:a.distance,hr:a.hr})}
     <div class="card">
       <h3>Details</h3>
       <div class="grid g3" style="gap:16px 18px;margin-top:12px">
@@ -890,11 +1133,12 @@ function render(view,payload){
   const navLabels={overview:'Overview',running:'Running',gym:'Strength',plan:'Lift Plan',rehab:'Rehab'};
   const top=titles[view]||titles[payload?.__parent]||["",""];
   if(titles[view]){document.getElementById('pageTitle').textContent=top[0];document.getElementById('pageSub').textContent=top[1];}
-  CHARTS={};
+  CHARTS={}; ROUTES={};
   let html="";
   switch(view){
     case "overview": html=viewOverview(); break;
     case "running":  html=viewRunning(); break;
+    case "trends":   html=viewTrends(); break;
     case "run":      html=viewRun(payload); document.getElementById('pageTitle').textContent="Activity"; document.getElementById('pageSub').textContent="Full run breakdown"; break;
     case "gym":      html=viewGym(); break;
     case "gymSession":html=viewGymSession(payload); document.getElementById('pageTitle').textContent="Session"; document.getElementById('pageSub').textContent="Strength session log"; break;
@@ -903,14 +1147,14 @@ function render(view,payload){
     default: html=viewOverview();
   }
   viewEl.innerHTML=html;
-  wireCharts();
+  wireCharts(); wireRoutes();
   window.scrollTo({top:0,behavior:"instant"});
   document.getElementById('side').classList.remove('open');
 }
 
 // nav labels (icons + text)
 (function setupNav(){
-  const labels=[["overview","Overview"],["running","Running"],["gym","Strength"],["plan","Lift Plan"],["rehab","Rehab"]];
+  const labels=[["overview","Overview"],["running","Running"],["trends","Trends"],["gym","Strength"],["plan","Lift Plan"],["rehab","Rehab"]];
   document.querySelectorAll('#nav button').forEach((b,i)=>{
     const [v,t]=labels[i]; b.dataset.view=v; b.innerHTML=ic(v)+`<span>${t}</span>`;
   });
@@ -977,6 +1221,18 @@ if(location.protocol.startsWith('http')){
   poll();                       // initial live pull
   setInterval(poll, 60000);     // check every minute (server refetches Garmin every ~15)
 }
+
+// Refresh button: when served by serve.py, ask the server to re-pull from Garmin
+// now; when opened as a plain file, just reload the page.
+document.getElementById('refreshBtn').addEventListener('click',async()=>{
+  const btn=document.getElementById('refreshBtn'); btn.classList.add('spin');
+  if(location.protocol.startsWith('http')){
+    try{ await fetch('api/refresh',{method:'POST'}); }catch(e){}
+    let n=0; const iv=setInterval(async()=>{ await poll(); if(++n>=8){ clearInterval(iv); btn.classList.remove('spin'); } },2500);
+  } else {
+    location.reload();
+  }
+});
 
 updateSyncLabel();
 render("overview");

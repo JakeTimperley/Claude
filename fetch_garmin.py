@@ -52,7 +52,7 @@ except ImportError:
 
 OUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "garmin-data.js")
 TOKEN_STORE = os.path.expanduser("~/.garminconnect")
-N_ACTIVITIES = 60          # how many recent activities to scan (cheap; used for trends)
+N_ACTIVITIES = 150         # activities to scan for log/trends/heatmap (1 call; details still capped below)
 N_RUNS = 12                # runs to keep in the dashboard
 N_GYM = 12                 # strength sessions to keep
 HIST_LEN = 12              # data points for trend sparklines
@@ -418,6 +418,25 @@ def fetch_all(g):
 
     print(f"• fetching {N_ACTIVITIES} recent activities")
     activities = safe(lambda: g.get_activities(0, N_ACTIVITIES), [], "get_activities") or []
+
+    # Lightweight daily log -> powers the heatmap, Trends, Records and ACWR.
+    log = []
+    for a in activities:
+        tk = ((a.get("activityType") or {}).get("typeKey") or "").lower()
+        kind = "run" if "running" in tk else ("gym" if "strength" in tk else "other")
+        date = (a.get("startTimeLocal") or "")[:10]
+        if not date:
+            continue
+        log.append({
+            "date": date, "type": kind,
+            "distanceKm": round((a.get("distance") or 0) / 1000.0, 1),
+            "durationSec": round(a.get("duration") or 0),
+            "load": round(a.get("activityTrainingLoad") or (a.get("aerobicTrainingEffect") or 0) * 20),
+            "avgHr": round(a.get("averageHR") or 0),
+            "elev": round(a.get("elevationGain") or 0),
+        })
+    if log:
+        data["activityLog"] = log
 
     # Derive VO2 max + trend charts from the activities (works even when the
     # dedicated metric endpoints are empty or rate-limited).

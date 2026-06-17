@@ -34,6 +34,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 # Shared state, guarded by a lock (background thread writes, requests read).
 _state = {"data": {}, "updatedAt": None, "status": "starting", "error": None}
 _lock = threading.Lock()
+_refresh = threading.Event()        # set by /api/refresh to trigger an immediate refetch
 
 
 def refresh_loop():
@@ -66,9 +67,12 @@ def refresh_loop():
             backoff = min(backoff + 1, 4)
             wait = REFRESH_MIN * (2 ** backoff)
             print(f"Refresh error: {e} — backing off {wait:g} min")
-            time.sleep(wait * 60)
+            _refresh.wait(wait * 60); _refresh.clear()
             continue
-        time.sleep(REFRESH_MIN * 60)
+        # Sleep until the interval elapses OR /api/refresh is requested.
+        if _refresh.wait(REFRESH_MIN * 60):
+            _refresh.clear()
+            print("Manual refresh requested.")
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -77,6 +81,17 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, *a):                          # quieter console
         pass
+
+    def do_POST(self):
+        if self.path.split("?")[0].rstrip("/") == "/api/refresh":
+            _refresh.set()
+            self.send_response(202)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            return
+        self.send_error(404)
 
     def do_GET(self):
         if self.path.split("?")[0] in ("/api/data", "/api/data/"):
