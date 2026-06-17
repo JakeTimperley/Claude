@@ -1,0 +1,5 @@
+# Connect IQ build configuration.
+project.manifest = manifest.xml
+
+# Source + resources are auto-discovered under source/ and resources/.
+# (Add device-specific resource folders here later if you need them.)
