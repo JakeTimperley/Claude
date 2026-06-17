@@ -529,8 +529,8 @@ function viewOverview(){
   const zTotal=Object.values(z).reduce((a,b)=>a+b,0);
 
   const recent=runs.slice(0,3).map(r=>activityRow(r)).join("");
-  const loadTrend=[420,510,480,560,620,540,610,700,660,742,800,842];
-  const distTrend=[42,55,48,60,58,64,52,68,57,64,60,63.9];
+  const loadTrend=p.loadTrend||[420,510,480,560,620,540,610,700,660,742,800,842];
+  const distTrend=p.distTrend||[42,55,48,60,58,64,52,68,57,64,60,63.9];
 
   return `
   <div class="grid g4">

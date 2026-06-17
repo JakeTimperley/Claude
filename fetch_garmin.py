@@ -52,7 +52,7 @@ except ImportError:
 
 OUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "garmin-data.js")
 TOKEN_STORE = os.path.expanduser("~/.garminconnect")
-N_ACTIVITIES = 30          # how many recent activities to scan
+N_ACTIVITIES = 60          # how many recent activities to scan (cheap; used for trends)
 N_RUNS = 12                # runs to keep in the dashboard
 N_GYM = 12                 # strength sessions to keep
 HIST_LEN = 12              # data points for trend sparklines
@@ -116,25 +116,42 @@ def fmt_date(iso):
 def connect():
     email = os.getenv("GARMIN_EMAIL")
     password = os.getenv("GARMIN_PASSWORD")
-    # Try cached token first (no password needed after first run).
+    g = Garmin()
+    # 1) Cached token first — this does NOT hit the login endpoint, so it can't
+    #    trigger rate limiting. Always prefer this once you've logged in once.
     try:
-        g = Garmin()
         g.login(TOKEN_STORE)
         print("Authenticated from cached token.")
         return g
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  (cached token unavailable: {e})")
+    # 2) Fresh login (needs credentials; may prompt for MFA the first time).
     if not email or not password:
         sys.exit("Set GARMIN_EMAIL and GARMIN_PASSWORD (see .env.example).")
     print("Logging in to Garmin Connect…")
-    g = Garmin(email=email, password=password, prompt_mfa=lambda: input("MFA code: ").strip())
-    g.login()
     try:
-        g.garth.dump(TOKEN_STORE)
-        print(f"Token cached at {TOKEN_STORE}")
-    except Exception:
-        pass
-    return g
+        g = Garmin(email=email, password=password,
+                   prompt_mfa=lambda: input("MFA code: ").strip())
+        g.login()
+        try:
+            g.garth.dump(TOKEN_STORE)
+            print(f"Token cached at {TOKEN_STORE} (future runs skip login).")
+        except Exception:
+            pass
+        return g
+    except Exception as e:
+        if "429" in str(e):
+            print("\n⚠  Garmin is rate-limiting your IP (HTTP 429) at the login step.\n"
+                  "   This happens after a few quick re-runs. Wait ~30–60 minutes, then\n"
+                  "   run it once more. After one successful login the cached token is\n"
+                  "   reused and you won't hit the login endpoint again.")
+        # Last resort: try to resume any token already on disk and carry on.
+        try:
+            g.garth.load(TOKEN_STORE)
+            print("   Resumed an existing cached token despite the login error.")
+            return g
+        except Exception:
+            sys.exit(f"Login failed: {e}")
 
 
 # --------------------------------------------------------------------------- #
@@ -165,14 +182,52 @@ def build_profile(g, today):
         if status:
             out["loadStatus"] = str(status).replace("_", " ").title()
 
-    bc = safe(lambda: g.get_body_composition(today, today), None, "get_body_composition")
-    if bc and bc.get("dateWeightList"):
-        w = bc["dateWeightList"][-1]
-        if w.get("weight"):
-            out["weight"] = kg(w["weight"])
+    # Weight: today alone is usually empty, so look back 30 days and take the latest.
+    start = (dt.date.today() - dt.timedelta(days=30)).isoformat()
+    bc = safe(lambda: g.get_body_composition(start, today), None, "get_body_composition")
+    weights = [w for w in ((bc or {}).get("dateWeightList") or []) if w.get("weight")]
+    if weights:
+        w = weights[-1]
+        out["weight"] = kg(w["weight"])
         if w.get("bodyFat"):
             out["bodyFat"] = round(w["bodyFat"], 1)
     return out
+
+
+def derive_overview(prof, activities):
+    """Fill VO2 max + trend charts from running activities — robust because it
+    needs no extra (rate-limited) API calls; the activity list already has it."""
+    run_acts = [a for a in activities
+                if "running" in ((a.get("activityType") or {}).get("typeKey") or "").lower()]
+    chrono = sorted(run_acts, key=lambda a: a.get("startTimeLocal", ""))  # oldest first
+
+    vo2s = [round(a["vO2MaxValue"]) for a in chrono if a.get("vO2MaxValue")]
+    if vo2s:
+        prof.setdefault("vo2max", vo2s[-1])
+        prof["vo2maxPrev"] = vo2s[0] if len(vo2s) > 1 else vo2s[-1]
+        prof["vo2Trend"] = vo2s[-HIST_LEN:]
+
+    weekly_dist, weekly_load = {}, {}
+    order = []
+    for a in chrono:
+        try:
+            d = dt.datetime.fromisoformat(a["startTimeLocal"].replace("Z", "")).date()
+        except Exception:
+            continue
+        wk = d.isocalendar()[:2]            # (iso-year, iso-week)
+        if wk not in weekly_dist:
+            order.append(wk)
+        weekly_dist[wk] = weekly_dist.get(wk, 0) + (a.get("distance") or 0) / 1000.0
+        weekly_load[wk] = weekly_load.get(wk, 0) + (a.get("activityTrainingLoad") or 0)
+
+    if order:
+        prof["distTrend"] = [round(weekly_dist[w], 1) for w in order[-10:]]
+        loads = [round(weekly_load[w]) for w in order]
+        if any(loads):
+            prof["loadTrend"] = loads[-HIST_LEN:]
+            prof.setdefault("trainingLoad", loads[-1])
+            prof["loadPrev"] = loads[-2] if len(loads) > 1 else loads[-1]
+    return prof
 
 
 def build_race_predictors(g):
@@ -355,8 +410,6 @@ def main():
     data = {}
 
     prof = build_profile(g, today)
-    if prof:
-        data["profile"] = prof
 
     rp = build_race_predictors(g)
     if rp:
@@ -364,6 +417,14 @@ def main():
 
     print(f"• fetching {N_ACTIVITIES} recent activities")
     activities = safe(lambda: g.get_activities(0, N_ACTIVITIES), [], "get_activities") or []
+
+    # Derive VO2 max + trend charts from the activities (works even when the
+    # dedicated metric endpoints are empty or rate-limited).
+    prof = derive_overview(prof, activities)
+    if prof:
+        data["profile"] = prof
+        print(f"• overview derived (vo2={prof.get('vo2max','?')}, "
+              f"{len(prof.get('distTrend',[]))} weeks of distance)")
 
     runs, gym = [], []
     for act in activities:
