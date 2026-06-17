@@ -16,6 +16,11 @@
     --pink:#f472b6; --magenta:#ec4899; --teal:#2dd4bf;
     --radius:16px;
   }
+  html.light{
+    color-scheme:light;
+    --bg:#eef2f8; --bg2:#e7edf6; --card:#ffffff; --card2:#f4f7fc;
+    --line:#dde4ee; --line2:#c7d2e2; --txt:#101a30; --mut:#56657f; --mut2:#8493ac;
+  }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
     font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -140,7 +145,8 @@
   /* heatmap */
   .heat{display:flex;gap:3px;overflow-x:auto;padding-bottom:4px}
   .heat .wk{display:flex;flex-direction:column;gap:3px}
-  .heat .d{width:14px;height:14px;border-radius:3px;background:#121d33;cursor:pointer}
+  .heat .d{width:14px;height:14px;border-radius:3px;background:var(--card2);cursor:pointer}
+  .heat .d[data-day]{cursor:pointer}
   .heat .d:hover{outline:2px solid var(--acc2);outline-offset:1px}
   .heatscale{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mut);margin-top:8px}
   .heatscale .d{width:12px;height:12px;border-radius:3px}
@@ -187,6 +193,20 @@
     .g2,.g3,.g4{grid-template-columns:1fr}
   }
   .menu-btn{display:none;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--card);border:1px solid var(--line)}
+
+  /* modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);display:none;place-items:center;z-index:100;padding:20px}
+  .modal.open{display:grid}
+  .modal-card{position:relative;background:var(--card);border:1px solid var(--line2);border-radius:16px;padding:22px;max-width:460px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal-x{position:absolute;right:14px;top:14px;width:32px;height:32px;border-radius:8px;background:var(--card2);border:1px solid var(--line);color:var(--mut);font-size:14px}
+  .modal-x:hover{color:var(--txt)}
+  /* settings */
+  .setrow{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line)}
+  .setrow:last-child{border-bottom:0}
+  .seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{padding:7px 14px;background:transparent;border:0;color:var(--mut);font-weight:600;font-size:13px}
+  .seg button.on{background:var(--acc);color:#04212a}
+  input[type=range]{accent-color:var(--acc)}
 </style>
 </head>
 <body>
@@ -224,6 +244,9 @@
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
+        <button class="iconbtn" id="settingsBtn" title="Settings" style="padding:0;width:40px">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
         <button class="iconbtn" id="refreshBtn" title="Refresh data">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 7"/><path d="M21 3v4h-4"/></svg>
           <span>Refresh</span>
@@ -237,6 +260,8 @@
     <div id="view"></div>
   </main>
 </div>
+
+<div class="modal" id="modal"><div class="modal-card"><button class="modal-x" id="modalX" aria-label="Close">✕</button><div id="modalBody"></div></div></div>
 
 <script src="garmin-data.js"></script>
 <script>
@@ -424,10 +449,19 @@ function genSampleLog(){
 }
 let activityLog = genSampleLog();
 
+// Recovery / wellness (Garmin-native concepts). Sample fallback; overridden live.
+let recovery = {
+  bodyBattery:72, bbHigh:96, bbLow:24,
+  sleepScore:84, sleepHours:7.4, sleepDeep:1.2, sleepRem:1.6, sleepLight:4.6,
+  hrv:68, hrvStatus:"Balanced", stress:28, stressStatus:"Low",
+  bbTrend:[28,40,62,78,90,84,60,44,72]
+};
+
 let updatedAt = null;
 function applyData(g){
   if (!g) return false;
   if (Array.isArray(g.activityLog) && g.activityLog.length) activityLog = g.activityLog;
+  if (g.recovery) recovery = Object.assign({}, recovery, g.recovery);
   if (g.profile)        profile        = Object.assign({}, profile, g.profile);
   if (g.racePredictors) racePredictors = g.racePredictors;
   if (g.runs)           runs           = g.runs;
@@ -596,7 +630,7 @@ function heatmap(weeks=17){
   const end=new Date(today); end.setDate(end.getDate()+(7-end.getDay())%7);
   const start=new Date(end); start.setDate(start.getDate()-weeks*7+1);
   let maxLoad=1; activityLog.forEach(a=>{ maxLoad=Math.max(maxLoad,a.load||0); });
-  const shade=v=>{ if(!v) return "#121d33";
+  const shade=v=>{ if(!v) return cssvar('--card2');
     const t=Math.min(1,v/(maxLoad*0.9)); const a=(0.18+0.82*t).toFixed(2);
     return `rgba(45,212,191,${a})`; };
   let cols="";
@@ -611,13 +645,13 @@ function heatmap(weeks=17){
       const tip = future ? "" :
         `${dt.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}` +
         (acts.length?` · <small>${dist?dist.toFixed(1)+' km · ':''}load ${load}</small>`:` · <small>rest</small>`);
-      cells+=`<div class="d" ${tip?`data-tip="${tip}"`:''} style="background:${future?'transparent':shade(load)}"></div>`;
+      cells+=`<div class="d" ${tip?`data-tip="${tip}"`:''} ${(!future&&acts.length)?`data-day="${key}"`:''} style="background:${future?'transparent':shade(load)}"></div>`;
     }
     cols+=`<div class="wk">${cells}</div>`;
   }
   return `<div class="heat">${cols}</div>
     <div class="heatscale"><span>Less</span>
-      <div class="d" style="background:#121d33"></div>
+      <div class="d" style="background:var(--card2)"></div>
       <div class="d" style="background:rgba(45,212,191,.3)"></div>
       <div class="d" style="background:rgba(45,212,191,.6)"></div>
       <div class="d" style="background:rgba(45,212,191,.9)"></div>
@@ -697,6 +731,19 @@ function donut(segments,{size=120,thick=14}={}){
   return `<svg viewBox="0 0 ${size} ${size}" style="width:${size}px;height:${size}px">
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1b2735" stroke-width="${thick}"/>${arcs}</svg>`;
 }
+// progress ring (single value 0..1)
+function ring(pct,{size=120,thick=13,color="--acc2",label="",sub=""}={}){
+  const p=Math.max(0,Math.min(1,pct)), r=(size-thick)/2, cx=size/2, cy=size/2, C=2*Math.PI*r;
+  return `<div style="position:relative;width:${size}px;height:${size}px">
+    <svg viewBox="0 0 ${size} ${size}" style="width:${size}px;height:${size}px">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1b2735" stroke-width="${thick}"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${cssvar(color)}" stroke-width="${thick}" stroke-linecap="round"
+        stroke-dasharray="${(p*C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 ${cx} ${cy})"/>
+    </svg>
+    <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center">
+      <div><b style="font-size:20px">${label}</b>${sub?`<div class="muted" style="font-size:11px">${sub}</div>`:''}</div></div>
+  </div>`;
+}
 
 /* =========================================================================
    ROUTE MAP
@@ -761,6 +808,23 @@ function wireRoutes(){
    FORMAT HELPERS
    ========================================================================= */
 const paceStr=m=>{const t=Math.floor(m),s=Math.round((m-t)*60);return `${t}:${String(s).padStart(2,'0')}`};
+
+/* ---- settings + unit helpers (persisted) --------------------------------- */
+const MI=0.621371;   // miles per km
+let settings=Object.assign({units:"km",theme:"dark",weekGoalKm:65},
+  JSON.parse(localStorage.getItem("trailhead-settings")||"{}"));
+function saveSettings(){ try{ localStorage.setItem("trailhead-settings",JSON.stringify(settings)); }catch(e){} }
+const uU=()=>settings.units==="mi"?"mi":"km";
+const uVal=km=>settings.units==="mi"?km*MI:km;             // numeric, converted
+const fmtDist=(km,dp=1)=>uVal(km).toFixed(dp)+" "+uU();
+const fmtKm=(km,dp=1)=>uVal(km).toFixed(dp);               // number only
+// pace string is stored per-km ("m:ss"); convert to per-unit
+function convPace(str){
+  if(!str||str.indexOf(":")<0) return str;
+  const [m,s]=str.split(":").map(Number); const perKm=m+s/60;
+  return paceStr(settings.units==="mi"?perKm/MI:perKm)+" /"+uU();
+}
+
 function deltaBadge(cur,prev,{invert=false,suffix=""}={}){
   const d=cur-prev; if(Math.abs(d)<1e-9) return `<span class="delta flat">—</span>`;
   const good = invert ? d<0 : d>0;
@@ -795,6 +859,7 @@ function viewOverview(){
   const recent=runs.slice(0,3).map(r=>activityRow(r)).join("");
   const loadTrend=p.loadTrend||[420,510,480,560,620,540,610,700,660,742,800,842];
   const distTrend=p.distTrend||[42,55,48,60,58,64,52,68,57,64,60,63.9];
+  const wkNow=weekly(1)[0]||{dist:0};
 
   return `
   <div class="grid g4">
@@ -855,12 +920,33 @@ function viewOverview(){
     </div>
   </div>
 
-  <div class="section-h"><h2>Training calendar</h2><span class="muted" style="font-size:13px">Daily load · last 17 weeks</span></div>
-  <div class="grid" style="grid-template-columns:2fr 1fr;gap:16px">
+  <div class="section-h"><h2>Recovery &amp; readiness</h2><span class="muted" style="font-size:13px">Last night &amp; today</span></div>
+  <div class="grid g4">
+    <div class="card" style="display:flex;gap:14px;align-items:center">
+      ${ring(recovery.bodyBattery/100,{color:'--green',label:recovery.bodyBattery,sub:'Battery'})}
+      <div><h3>Body Battery</h3><div class="sub">High ${recovery.bbHigh} · Low ${recovery.bbLow}</div>
+        <div style="margin-top:6px;width:130px">${lineChart(recovery.bbTrend,{h:40,color:'--green'})}</div></div>
+    </div>
+    <div class="card tight"><div class="kpi-top"><div class="kpi-ic">${ic('heart',cssvar('--purple'))}</div><span class="delta up">${recovery.sleepScore>=80?'Good':'Fair'}</span></div>
+      <h3 style="margin-top:12px">Sleep Score</h3><div class="big" style="font-size:28px">${recovery.sleepScore}</div>
+      <div class="sub">${recovery.sleepHours} h · deep ${recovery.sleepDeep}h · REM ${recovery.sleepRem}h</div></div>
+    <div class="card tight"><div class="kpi-top"><div class="kpi-ic">${ic('trend',cssvar('--blue'))}</div></div>
+      <h3 style="margin-top:12px">HRV</h3><div class="big" style="font-size:28px">${recovery.hrv} <span class="muted" style="font-size:14px;font-weight:500">ms</span></div>
+      <div class="sub">${recovery.hrvStatus}</div></div>
+    <div class="card tight"><div class="kpi-top"><div class="kpi-ic">${ic('bolt',cssvar('--yellow'))}</div></div>
+      <h3 style="margin-top:12px">Stress</h3><div class="big" style="font-size:28px">${recovery.stress}</div>
+      <div class="sub">${recovery.stressStatus}</div></div>
+  </div>
+
+  <div class="section-h"><h2>Training calendar</h2><span class="muted" style="font-size:13px">Daily load · click a day for detail</span></div>
+  <div class="grid" style="grid-template-columns:2fr 1fr 1fr;gap:16px">
     <div class="card"><h3>Consistency</h3><div style="margin-top:12px">${heatmap(17)}</div></div>
+    <div class="card" style="text-align:center"><h3>Weekly goal</h3>
+      <div style="margin:10px auto 0;width:130px">${ring(wkNow.dist/(settings.weekGoalKm||1),{color:'--acc2',label:fmtKm(wkNow.dist,0),sub:'of '+fmtDist(settings.weekGoalKm,0)})}</div>
+      <div class="sub" style="margin-top:8px">${Math.round(wkNow.dist/(settings.weekGoalKm||1)*100)}% of weekly target</div></div>
     <div class="card"><h3>Workload balance</h3>
       <div style="margin-top:8px">${acwrGauge(acwr())}</div>
-      <div class="sub" style="margin-top:6px">Acute:chronic load ratio. Stay in the <span style="color:var(--green)">green zone (0.8–1.3)</span> to build fitness while limiting injury risk.</div>
+      <div class="sub" style="margin-top:6px">Acute:chronic ratio. Stay <span style="color:var(--green)">green (0.8–1.3)</span> to build fitness with low injury risk.</div>
     </div>
   </div>
 
@@ -905,8 +991,8 @@ function activityRow(a){
   const isRun=a.type==="run";
   const icn=isRun?(a.effort==="VO2 Max"?"bolt":"running"):"gym";
   const col=isRun?"--acc2":"--purple";
-  const m1=isRun?`<div><b>${a.distance} km</b><small>distance</small></div>`:`<div><b>${(a.volume/1000).toFixed(1)} t</b><small>volume</small></div>`;
-  const m2=isRun?`<div><b>${a.pace} /km</b><small>pace</small></div>`:`<div><b>${a.sets}</b><small>sets</small></div>`;
+  const m1=isRun?`<div><b>${fmtDist(a.distance)}</b><small>distance</small></div>`:`<div><b>${(a.volume/1000).toFixed(1)} t</b><small>volume</small></div>`;
+  const m2=isRun?`<div><b>${convPace(a.pace)}</b><small>pace</small></div>`:`<div><b>${a.sets}</b><small>sets</small></div>`;
   const m3=isRun?`<div><b>${a.avgHr}</b><small>avg HR</small></div>`:`<div><b>${a.duration}</b><small>time</small></div>`;
   return `<div class="arow" data-activity="${a.id}">
     <div class="ai">${ic(icn,cssvar(col))}</div>
@@ -922,7 +1008,7 @@ function viewRunning(){
   const totals=runs.reduce((a,r)=>({d:a.d+r.distance,e:a.e+r.elev}),{d:0,e:0});
   return `
   <div class="grid g4">
-    <div class="card tight"><h3>This week</h3><div class="big" style="font-size:24px">${totals.d.toFixed(1)} km</div><div class="sub">${runs.length} runs</div></div>
+    <div class="card tight"><h3>This week</h3><div class="big" style="font-size:24px">${fmtDist(totals.d)}</div><div class="sub">${runs.length} runs</div></div>
     <div class="card tight"><h3>Elevation</h3><div class="big" style="font-size:24px">${totals.e} m</div><div class="sub">total climb</div></div>
     <div class="card tight"><h3>Avg VO₂ Max</h3><div class="big" style="font-size:24px">${profile.vo2max}</div><div class="sub">trending up</div></div>
     <div class="card tight"><h3>Marathon ready</h3><div class="big" style="font-size:24px">3:02</div><div class="sub">predicted finish</div></div>
@@ -941,9 +1027,9 @@ function recordCards(){
     <h3 style="margin-top:12px">${label}</h3><div class="big" style="font-size:24px">${val}</div><div class="sub">${sub||""}</div></div>`;
   const dstr=d=>d?new Date(d.date).toLocaleDateString(undefined,{day:'numeric',month:'short'}):"—";
   const out=[];
-  out.push(card("mountain","--acc2","Longest run", r.longest?r.longest.distanceKm+" km":"—", dstr(r.longest)));
-  if(r.fastest) out.push(card("bolt","--pink","Fastest pace", paceStr((r.fastest.durationSec/60)/r.fastest.distanceKm)+" /km", `${r.fastest.distanceKm} km · ${dstr(r.fastest)}`));
-  out.push(card("trend","--green","Biggest week", r.bigWeek?r.bigWeek.dist+" km":"—", r.bigWeek?("wk of "+r.bigWeek.label):""));
+  out.push(card("mountain","--acc2","Longest run", r.longest?fmtDist(r.longest.distanceKm):"—", dstr(r.longest)));
+  if(r.fastest) out.push(card("bolt","--pink","Fastest pace", convPace(paceStr((r.fastest.durationSec/60)/r.fastest.distanceKm)), `${fmtDist(r.fastest.distanceKm)} · ${dstr(r.fastest)}`));
+  out.push(card("trend","--green","Biggest week", r.bigWeek?fmtDist(r.bigWeek.dist):"—", r.bigWeek?("wk of "+r.bigWeek.label):""));
   out.push(card("mountain","--yellow","Most climb", r.climb?(r.climb.elev||0)+" m":"—", dstr(r.climb)));
   return out.join("");
 }
@@ -967,19 +1053,19 @@ function viewRun(a){
   <button class="back" data-view="running">← Back to running</button>
   <div style="display:flex;align-items:center;gap:12px;margin:4px 0 16px;flex-wrap:wrap">
     <div class="kpi-ic" style="width:44px;height:44px">${ic(a.effort==='VO2 Max'?'bolt':'running',cssvar('--acc2'))}</div>
-    <div><h2 style="margin:0">${a.title}</h2><div class="muted" style="font-size:13px">${a.date} · ${a.distance} km · ${a.pace} /km${a.weather?` · ${a.weather}`:''}</div></div>
+    <div><h2 style="margin:0">${a.title}</h2><div class="muted" style="font-size:13px">${a.date} · ${fmtDist(a.distance)} · ${convPace(a.pace)}${a.weather?` · ${a.weather}`:''}</div></div>
     <span class="chip run" style="margin-left:auto">${a.effort}</span>
     ${a.vo2?`<span class="chip race">🏔 VO₂ ${a.vo2}</span>`:''}
   </div>
 
   <div class="grid g2" style="align-items:stretch">
-    ${routeMap(a.route,[`📍 ${a.distance} km`,`⛰ ${a.elev} m`],{dist:a.distance,hr:a.hr})}
+    ${routeMap(a.route,[`📍 ${fmtDist(a.distance)}`,`⛰ ${a.elev} m`],{dist:a.distance,hr:a.hr})}
     <div class="card">
       <h3>Details</h3>
       <div class="grid g3" style="gap:16px 18px;margin-top:12px">
-        ${stat("Distance",a.distance+" km")}
+        ${stat("Distance",fmtDist(a.distance))}
         ${stat("Moving Time",a.duration)}
-        ${stat("Avg Pace",a.pace)}
+        ${stat("Avg Pace",convPace(a.pace))}
         ${stat("Avg HR",a.avgHr)}
         ${stat("Max HR",a.maxHr)}
         ${stat("Elevation",a.elev+" m")}
@@ -1160,10 +1246,55 @@ function render(view,payload){
   });
 })();
 
+// ---- theme + modal ----
+function applyTheme(){ document.documentElement.classList.toggle('light', settings.theme==='light'); }
+const modal=document.getElementById('modal'), modalBody=document.getElementById('modalBody');
+function openModal(html){ modalBody.innerHTML=html; modal.classList.add('open'); }
+function closeModal(){ modal.classList.remove('open'); }
+document.getElementById('modalX').addEventListener('click',closeModal);
+modal.addEventListener('click',e=>{ if(e.target===modal) closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+
+function dayModal(date){
+  const acts=activityLog.filter(a=>a.date===date);
+  const d=new Date(date).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
+  const rows=acts.map(a=>{
+    const isRun=a.type==='run';
+    const sub=isRun?`${fmtDist(a.distanceKm)} · ${a.durationSec?paceStr((a.durationSec/60)/(a.distanceKm||1)/(settings.units==='mi'?MI:1))+' /'+uU():''}`:`${Math.round(a.durationSec/60)} min`;
+    return `<div class="arow" style="cursor:default"><div class="ai">${ic(isRun?'running':'gym',cssvar(isRun?'--acc2':'--purple'))}</div>
+      <div class="at"><b>${isRun?'Run':'Strength'}</b><small>${sub}</small></div>
+      <div class="metrics"><div><b>${a.load||0}</b><small>load</small></div>${a.avgHr?`<div><b>${a.avgHr}</b><small>HR</small></div>`:''}</div></div>`;
+  }).join("");
+  const totDist=acts.reduce((s,a)=>s+(a.distanceKm||0),0), totLoad=acts.reduce((s,a)=>s+(a.load||0),0);
+  openModal(`<h2 style="margin:0 0 4px">${d}</h2><div class="muted" style="font-size:13px;margin-bottom:12px">${acts.length} ${acts.length===1?'activity':'activities'} · ${fmtDist(totDist)} · load ${totLoad}</div>
+    <div class="alist">${rows||'<div class="muted">Rest day</div>'}</div>`);
+}
+
+function settingsModal(){
+  const seg=(name,opts,cur)=>`<div class="seg" data-seg="${name}">${opts.map(o=>`<button data-val="${o[0]}" class="${cur===o[0]?'on':''}">${o[1]}</button>`).join('')}</div>`;
+  openModal(`<h2 style="margin:0 0 14px">Settings</h2>
+    <div class="setrow"><div><b>Units</b><div class="muted" style="font-size:12px">Distance &amp; pace</div></div>${seg('units',[['km','Kilometres'],['mi','Miles']],settings.units)}</div>
+    <div class="setrow"><div><b>Theme</b><div class="muted" style="font-size:12px">Appearance</div></div>${seg('theme',[['dark','Dark'],['light','Light']],settings.theme)}</div>
+    <div class="setrow"><div><b>Weekly goal</b><div class="muted" style="font-size:12px"><span id="goalVal">${fmtDist(settings.weekGoalKm,0)}</span> running</div></div>
+      <input type="range" id="goalRange" min="10" max="150" step="5" value="${settings.weekGoalKm}" style="width:150px"></div>`);
+  modalBody.querySelectorAll('[data-seg]').forEach(seg=>{
+    seg.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return;
+      settings[seg.dataset.seg]=b.dataset.val; saveSettings(); applyTheme();
+      seg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+      render(current);
+    });
+  });
+  const gr=modalBody.querySelector('#goalRange');
+  gr.addEventListener('input',()=>{ settings.weekGoalKm=+gr.value; document.getElementById('goalVal').textContent=fmtDist(settings.weekGoalKm,0); });
+  gr.addEventListener('change',()=>{ saveSettings(); render(current); });
+}
+
 // event delegation
 document.addEventListener('click',e=>{
   const navBtn=e.target.closest('[data-view]');
   if(navBtn){ render(navBtn.dataset.view); return; }
+  const day=e.target.closest('[data-day]');
+  if(day){ dayModal(day.dataset.day); return; }
   const act=e.target.closest('[data-activity]');
   if(act){
     const id=act.dataset.activity;
@@ -1174,6 +1305,8 @@ document.addEventListener('click',e=>{
   }
 });
 document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('side').classList.toggle('open'));
+document.getElementById('settingsBtn').addEventListener('click',settingsModal);
+applyTheme();
 
 // generic hover tooltip for any element with [data-tip]
 (function(){

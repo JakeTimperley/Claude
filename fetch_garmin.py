@@ -231,6 +231,48 @@ def derive_overview(prof, activities):
     return prof
 
 
+def build_recovery(g, today):
+    """Sleep, Body Battery, HRV, stress. All best-effort (these endpoints are
+    flaky / rate-limited); only present fields are emitted."""
+    print("• recovery (sleep / body battery / hrv / stress)")
+    out = {}
+    sl = safe(lambda: g.get_sleep_data(today), None, "get_sleep_data")
+    dto = (sl or {}).get("dailySleepDTO") or {}
+    score = ((dto.get("sleepScores") or {}).get("overall") or {}).get("value")
+    if score:
+        out["sleepScore"] = round(score)
+    for key, sec in [("sleepHours", "sleepTimeSeconds"), ("sleepDeep", "deepSleepSeconds"),
+                     ("sleepRem", "remSleepSeconds"), ("sleepLight", "lightSleepSeconds")]:
+        if dto.get(sec):
+            out[key] = round(dto[sec] / 3600, 1)
+
+    hrv = safe(lambda: g.get_hrv_data(today), None, "get_hrv_data")
+    summ = (hrv or {}).get("hrvSummary") or {}
+    if summ.get("lastNightAvg"):
+        out["hrv"] = round(summ["lastNightAvg"])
+    if summ.get("status"):
+        out["hrvStatus"] = str(summ["status"]).replace("_", " ").title()
+
+    st = safe(lambda: g.get_stress_data(today), None, "get_stress_data")
+    if st and st.get("avgStressLevel") is not None and st["avgStressLevel"] >= 0:
+        v = st["avgStressLevel"]
+        out["stress"] = round(v)
+        out["stressStatus"] = ("Low" if v < 26 else "Medium" if v < 51 else "High" if v < 76 else "Very high")
+
+    bb = safe(lambda: g.get_body_battery(today, today), None, "get_body_battery")
+    try:
+        arr = (bb[0].get("bodyBatteryValuesArray") if bb else None) or []
+        levels = [v[1] for v in arr if isinstance(v, list) and len(v) > 1 and isinstance(v[1], (int, float))]
+        if levels:
+            out["bodyBattery"] = round(levels[-1])
+            out["bbHigh"], out["bbLow"] = round(max(levels)), round(min(levels))
+            step = max(1, len(levels) // 9)
+            out["bbTrend"] = [round(x) for x in levels[::step]][-9:]
+    except Exception:
+        pass
+    return out
+
+
 def build_race_predictors(g):
     print("• race predictors")
     rp = safe(lambda: g.get_race_predictions(), None, "get_race_predictions")
@@ -415,6 +457,10 @@ def fetch_all(g):
     rp = build_race_predictors(g)
     if rp:
         data["racePredictors"] = rp
+
+    rec = build_recovery(g, today)
+    if rec:
+        data["recovery"] = rec
 
     print(f"• fetching {N_ACTIVITIES} recent activities")
     activities = safe(lambda: g.get_activities(0, N_ACTIVITIES), [], "get_activities") or []
