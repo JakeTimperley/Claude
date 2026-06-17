@@ -27,6 +27,6 @@ class SummaryView extends Ui.View {
 
 class SummaryDelegate extends Ui.BehaviorDelegate {
     function initialize() { BehaviorDelegate.initialize(); }
-    function onBack() { System.exit(); return true; }
-    function onSelect() { System.exit(); return true; }
+    function onBack() { System.exit(); }
+    function onSelect() { System.exit(); }
 }

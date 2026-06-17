@@ -24,7 +24,7 @@ class SetEntry {
 class Workout {
     var session = null;
 
-    var exercises = [
+    var exercises as Lang.Array<Lang.String> = [
         "Back Squat", "Front Squat", "Bench Press", "Incline Bench",
         "Deadlift", "Romanian Deadlift", "Overhead Press", "Barbell Row",
         "Pull-up", "Lat Pulldown", "Leg Press", "Bulgarian Split Squat",
@@ -34,7 +34,7 @@ class Workout {
 
     var weight = 60.0;        // kg
     var reps = 8;
-    var sets = [];            // Array<SetEntry>
+    var sets as Lang.Array<SetEntry> = [];
 
     var restMs = 90 * 1000;   // configurable rest length
     var restStartMs = 0;
