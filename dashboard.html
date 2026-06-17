@@ -117,12 +117,25 @@
   .map .ovl{position:absolute;left:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap}
   .splitbar{display:flex;align-items:flex-end;gap:4px;height:120px}
   .splitbar .s{flex:1;background:linear-gradient(180deg,var(--acc2),var(--acc));border-radius:5px 5px 2px 2px;position:relative;min-height:6px}
-  .splitbar .s:hover{filter:brightness(1.15)}
+  .splitbar .s{cursor:pointer;transition:filter .1s}
+  .splitbar .s:hover{filter:brightness(1.25)}
+  .splitbar .s.fast{background:linear-gradient(180deg,var(--green),var(--teal))}
   .splitbar .s small{position:absolute;top:-17px;left:0;right:0;text-align:center;font-size:10px;color:var(--mut)}
   .splitbar .s span{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--mut2)}
 
   .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
   .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
+
+  /* interactive charts */
+  .ichart{position:relative;width:100%;cursor:crosshair;touch-action:none}
+  .ic-svg{position:absolute;inset:0}
+  .ic-line{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.4);pointer-events:none;opacity:0;transition:opacity .08s}
+  .ic-dot{position:absolute;width:11px;height:11px;border-radius:50%;border:2px solid #fff;transform:translate(-50%,-50%);pointer-events:none;opacity:0;box-shadow:0 0 10px rgba(0,0,0,.5)}
+  .ic-tip{position:absolute;pointer-events:none;background:#0b1120;border:1px solid var(--line2);border-radius:9px;padding:6px 10px;font-size:13px;font-weight:700;white-space:nowrap;transform:translate(-50%,calc(-100% - 14px));opacity:0;transition:opacity .08s;z-index:6;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  .ic-tip small{color:var(--mut);font-weight:500}
+  .ic-zlabel{position:absolute;right:7px;transform:translateY(-50%);font-size:10px;font-weight:800;letter-spacing:.3px;pointer-events:none;opacity:.9;text-shadow:0 1px 3px #000}
+  .hovertip{position:fixed;pointer-events:none;background:#0b1120;border:1px solid var(--line2);border-radius:8px;padding:5px 9px;font-size:12px;font-weight:600;white-space:nowrap;transform:translate(-50%,-130%);opacity:0;transition:opacity .08s;z-index:60}
+  .hovertip small{color:var(--mut);font-weight:500}
 
   .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 
@@ -425,37 +438,99 @@ function lineChart(data,{w=320,h=80,color="--acc2",fill=true,min,max}={}){
   </svg>`;
 }
 // Big vivid filled area chart with a smooth curve + two-tone gradient glow.
-function areaChart(data,{w=600,h=170,line="--green",top="--green",bot="--magenta",min,max}={}){
-  const lc=cssvar(line), tc=cssvar(top), bc=cssvar(bot);
-  const mn=min??Math.min(...data), mx=max??Math.max(...data), rng=(mx-mn)||1, pad=6;
-  const X=i=>pad+i*((w-pad*2)/(data.length-1));
-  const Y=v=>h-pad-((v-mn)/rng)*(h-pad*2);
-  // smooth path via Catmull-Rom -> bezier
+// smooth Catmull-Rom -> cubic-bezier path
+function smoothPath(data,X,Y){
   let d=`M ${X(0).toFixed(1)} ${Y(data[0]).toFixed(1)}`;
   for(let i=0;i<data.length-1;i++){
     const x0=X(Math.max(0,i-1)),y0=Y(data[Math.max(0,i-1)]);
     const x1=X(i),y1=Y(data[i]);
     const x2=X(i+1),y2=Y(data[i+1]);
     const x3=X(Math.min(data.length-1,i+2)),y3=Y(data[Math.min(data.length-1,i+2)]);
-    const c1x=x1+(x2-x0)/6, c1y=y1+(y2-y0)/6, c2x=x2-(x3-x1)/6, c2y=y2-(y3-y1)/6;
+    const c1x=x1+(x2-x0)/6,c1y=y1+(y2-y0)/6,c2x=x2-(x3-x1)/6,c2y=y2-(y3-y1)/6;
     d+=` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
   }
-  const fill=`${d} L ${X(data.length-1).toFixed(1)} ${h-pad} L ${pad} ${h-pad} Z`;
+  return d;
+}
+
+/* ---- Interactive area chart ----------------------------------------------
+   interactiveChart(series, opts) returns a placeholder div; wireCharts() (run
+   after each render) draws the SVG and attaches hover crosshair + tooltip.
+   opts: {h, line, top, bot, min, max, zones:[{label,bpm,color}], fmt:(i,v)=>html}
+   --------------------------------------------------------------------------- */
+let CHARTS={};
+function interactiveChart(data,opts={}){
+  data=(data&&data.length)?data.slice():[0];
+  if(data.length===1) data=[data[0],data[0]];
+  const id="ic_"+Math.random().toString(36).slice(2,9);
+  CHARTS[id]={data,opts};
+  const h=opts.h||170;
+  return `<div class="ichart" data-ic="${id}" style="height:${h}px">
+    <div class="ic-svg"></div><div class="ic-line"></div><div class="ic-dot"></div><div class="ic-tip"></div>
+  </div>`;
+}
+function chartSvg(data,opts,m){
+  const {W,H,pad,X,Y,mn,mx}=m;
+  const lc=cssvar(opts.line||"--acc2"),tc=cssvar(opts.top||opts.line||"--acc2"),bc=cssvar(opts.bot||"--blue");
   const g="g"+Math.random().toString(36).slice(2,7);
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block">
-    <defs>
-      <linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="${tc}" stop-opacity=".55"/>
-        <stop offset="1" stop-color="${bc}" stop-opacity=".04"/>
-      </linearGradient>
-      <linearGradient id="${g}l" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="${tc}"/><stop offset="1" stop-color="${lc}"/>
-      </linearGradient>
-    </defs>
+  const d=smoothPath(data,X,Y);
+  const fill=`${d} L ${X(data.length-1).toFixed(1)} ${H-pad} L ${pad} ${H-pad} Z`;
+  let bands="";
+  (opts.zones||[]).forEach(z=>{ if(z.bpm<mn||z.bpm>mx) return;
+    const y=Y(z.bpm).toFixed(1);
+    bands+=`<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="${cssvar(z.color)}" stroke-opacity=".45" stroke-width="1" stroke-dasharray="5 5" vector-effect="non-scaling-stroke"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
+    <defs><linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${tc}" stop-opacity=".55"/><stop offset="1" stop-color="${bc}" stop-opacity=".04"/></linearGradient>
+      <linearGradient id="${g}l" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${tc}"/><stop offset="1" stop-color="${lc}"/></linearGradient></defs>
+    ${bands}
     <path d="${fill}" fill="url(#${g})"/>
-    <path d="${d}" fill="none" stroke="url(#${g}l)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${d}" fill="none" stroke="url(#${g}l)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
   </svg>`;
 }
+function wireCharts(){
+  document.querySelectorAll('[data-ic]').forEach(el=>{
+    const cfg=CHARTS[el.getAttribute('data-ic')]; if(!cfg) return;
+    const {data,opts}=cfg, W=600, H=opts.h||170, pad=6;
+    const mn=opts.min??Math.min(...data), mx=opts.max??Math.max(...data), rng=(mx-mn)||1;
+    const X=i=>pad+i*((W-pad*2)/(data.length-1));
+    const Y=v=>H-pad-((v-mn)/rng)*(H-pad*2);
+    el.querySelector('.ic-svg').innerHTML=chartSvg(data,opts,{W,H,pad,X,Y,mn,mx,rng});
+    // zone labels as (non-stretched) DOM so text isn't distorted
+    el.querySelectorAll('.ic-zlabel').forEach(n=>n.remove());
+    (opts.zones||[]).forEach(z=>{ if(z.bpm<mn||z.bpm>mx) return;
+      const lbl=document.createElement('div'); lbl.className='ic-zlabel';
+      lbl.textContent=z.label; lbl.style.top=(Y(z.bpm)/H*100)+'%'; lbl.style.color=cssvar(z.color);
+      el.appendChild(lbl);
+    });
+    const line=el.querySelector('.ic-line'),dot=el.querySelector('.ic-dot'),tip=el.querySelector('.ic-tip');
+    dot.style.background=cssvar(opts.line||opts.top||'--acc2');
+    const move=ev=>{
+      const r=el.getBoundingClientRect();
+      const cx=('touches' in ev && ev.touches[0]?ev.touches[0].clientX:ev.clientX);
+      const x0=pad/W*r.width, x1=(W-pad)/W*r.width;
+      let frac=(cx-r.left-x0)/((x1-x0)||1); frac=Math.min(1,Math.max(0,frac));
+      const i=Math.round(frac*(data.length-1));
+      const xpx=X(i)/W*r.width, ypx=Y(data[i])/H*r.height;
+      line.style.left=xpx+'px'; dot.style.left=xpx+'px'; dot.style.top=ypx+'px';
+      tip.style.left=Math.min(r.width-60,Math.max(60,xpx))+'px'; tip.style.top=ypx+'px';
+      tip.innerHTML=opts.fmt?opts.fmt(i,data[i]):`${data[i]}${opts.unit||''}`;
+      line.style.opacity=dot.style.opacity=tip.style.opacity=1;
+    };
+    const hide=()=>{line.style.opacity=dot.style.opacity=tip.style.opacity=0;};
+    el.onmousemove=move; el.onmouseleave=hide;
+    el.ontouchstart=move; el.ontouchmove=ev=>{ev.preventDefault();move(ev);}; el.ontouchend=hide;
+  });
+}
+// HR zone thresholds (lower bound of each zone) from a max HR
+function hrZonesFor(maxHr){
+  const m=Math.max(maxHr||0,185);
+  return [{label:"Z2",bpm:Math.round(m*.70),color:"--green"},
+          {label:"Z3",bpm:Math.round(m*.80),color:"--yellow"},
+          {label:"Z4",bpm:Math.round(m*.90),color:"--pink"},
+          {label:"Z5",bpm:Math.round(m*.95),color:"--red"}];
+}
+function zoneOf(bpm,zones){ let z="Z1"; zones.forEach(t=>{ if(bpm>=t.bpm) z=t.label; }); return z; }
 function barChart(data,{w=320,h=90,color="--acc2"}={}){
   const c=cssvar(color), mx=Math.max(...data)||1, n=data.length, gap=3;
   const bw=(w-(n-1)*gap)/n;
@@ -549,19 +624,22 @@ function viewOverview(){
       <div><h3>Fitness Trend — VO₂ Max</h3><div class="big" style="font-size:24px">${p.vo2max} <span class="muted" style="font-size:13px;font-weight:500">last 12 weeks</span></div></div>
       <span class="chip race">${ic('trophy',cssvar('--yellow'))} Top 5% age group</span>
     </div>
-    <div style="margin-top:10px">${lineChart(p.vo2Trend,{h:120,color:'--yellow'})}</div>
+    <div style="margin-top:10px">${interactiveChart(p.vo2Trend,{h:120,line:'--yellow',top:'--yellow',bot:'--yellow',
+      fmt:(i,v)=>`${v} <small>VO₂ max</small>`})}</div>
   </div>
 
   <div class="grid g2" style="margin-top:16px">
     <div class="card">
       <div class="kpi-top"><h3>Training Load</h3><span class="delta up">▲ Productive</span></div>
       <div class="big" style="font-size:24px">${p.trainingLoad} <span class="muted" style="font-size:13px;font-weight:500">acute load</span></div>
-      <div style="margin-top:6px">${areaChart(loadTrend,{h:170,line:'--green',top:'--green',bot:'--magenta'})}</div>
+      <div style="margin-top:6px">${interactiveChart(loadTrend,{h:170,line:'--green',top:'--green',bot:'--magenta',
+        fmt:(i,v)=>`${v} <small>load</small> <small>· wk ${i+1}</small>`})}</div>
     </div>
     <div class="card">
       <div class="kpi-top"><h3>Weekly Distance</h3><span class="delta up">▲ +9%</span></div>
       <div class="big" style="font-size:24px">${distTrend[distTrend.length-1]} <span class="muted" style="font-size:13px;font-weight:500">km this week</span></div>
-      <div style="margin-top:6px">${areaChart(distTrend,{h:170,line:'--acc2',top:'--acc',bot:'--blue'})}</div>
+      <div style="margin-top:6px">${interactiveChart(distTrend,{h:170,line:'--acc2',top:'--acc',bot:'--blue',
+        fmt:(i,v)=>`${v} <small>km</small> <small>· wk ${i+1}</small>`})}</div>
     </div>
   </div>
 
@@ -629,16 +707,19 @@ function viewRunning(){
 
 function viewRun(a){
   const fastest=Math.min(...a.splits), slowest=Math.max(...a.splits);
+  const showLabels=a.splits.length<=16;
   const splitBars=a.splits.map((s,i)=>{
     const h=18+ (slowest-s)/((slowest-fastest)||1)*82;
-    return `<div class="s" style="height:${h.toFixed(0)}%"><small>${paceStr(s)}</small><span>${i+1}</span></div>`;
+    const fast=s<=fastest+0.01;
+    return `<div class="s${fast?' fast':''}" data-tip="Km ${i+1} · <small>${paceStr(s)} /km</small>" style="height:${h.toFixed(0)}%">${showLabels?`<small>${paceStr(s)}</small>`:''}<span>${i+1}</span></div>`;
   }).join("");
   const stat=(l,v,s)=>`<div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.4px">${l}</div><div style="font-size:21px;font-weight:750;margin-top:3px">${v}</div>${s?`<div class="sub">${s}</div>`:''}</div>`;
   // running dynamics (use live values when present, else a sensible default from pace)
   const avgPaceMin=a.splits.reduce((x,y)=>x+y,0)/a.splits.length;
   const cadence=a.cadence||Math.round(174+(5-Math.min(5,avgPaceMin))*4);
   const dyn=[["Cadence",cadence+" spm"],["Stride",(a.stride||1.18)+" m"],["Vert. Osc",(a.vosc||7.8)+" cm"],["Avg Grade",(a.grade||0.6)+" %"]];
-  const zonePills=['Z1','Z2','Z3','Z4','Z5'].map((z,i)=>`<span class="chip" style="color:${['var(--mut2)','var(--green)','var(--yellow)','var(--pink)','var(--red)'][i]}">${z}</span>`).join("");
+  const hrZones=hrZonesFor(a.maxHr);
+  const zonePills=['Z1','Z2','Z3','Z4','Z5'].map((z,i)=>`<span class="chip" data-tip="${['Recovery','Easy','Aerobic','Threshold','Max'][i]}" style="color:${['var(--mut2)','var(--green)','var(--yellow)','var(--pink)','var(--red)'][i]}">${z}</span>`).join("");
   return `
   <button class="back" data-view="running">← Back to running</button>
   <div style="display:flex;align-items:center;gap:12px;margin:4px 0 16px;flex-wrap:wrap">
@@ -675,14 +756,16 @@ function viewRun(a){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <h3>Heart Rate</h3><div class="pillrow">${zonePills}</div>
     </div>
-    <div style="margin-top:10px">${areaChart(a.hr,{h:180,line:'--pink',top:'--magenta',bot:'--purple'})}</div>
-    <div class="legend" style="margin-top:8px"><span><i style="background:var(--magenta)"></i>BPM over distance · avg ${a.avgHr} · max ${a.maxHr}</span></div>
+    <div style="margin-top:10px">${interactiveChart(a.hr,{h:180,line:'--pink',top:'--magenta',bot:'--purple',zones:hrZones,
+      fmt:(i,v)=>`${v} <small>bpm</small> · ${zoneOf(v,hrZones)} <small>· ${(i/(a.hr.length-1)*a.distance).toFixed(1)} km</small>`})}</div>
+    <div class="legend" style="margin-top:8px"><span><i style="background:var(--magenta)"></i>Hover the chart for BPM &amp; zone · avg ${a.avgHr} · max ${a.maxHr}</span></div>
   </div>
 
   <div class="grid g2" style="margin-top:16px">
     <div class="card">
       <h3>Elevation</h3>
-      <div style="margin-top:10px">${areaChart(a.elevProfile,{h:150,line:'--green',top:'--green',bot:'--teal'})}</div>
+      <div style="margin-top:10px">${interactiveChart(a.elevProfile,{h:150,line:'--green',top:'--green',bot:'--teal',
+        fmt:(i,v)=>`${v} <small>m</small> <small>· ${(i/(a.elevProfile.length-1)*a.distance).toFixed(1)} km</small>`})}</div>
       <div class="legend" style="margin-top:8px"><span><i style="background:var(--green)"></i>Metres · total climb ${a.elev} m</span></div>
     </div>
     <div class="card">
@@ -807,6 +890,7 @@ function render(view,payload){
   const navLabels={overview:'Overview',running:'Running',gym:'Strength',plan:'Lift Plan',rehab:'Rehab'};
   const top=titles[view]||titles[payload?.__parent]||["",""];
   if(titles[view]){document.getElementById('pageTitle').textContent=top[0];document.getElementById('pageSub').textContent=top[1];}
+  CHARTS={};
   let html="";
   switch(view){
     case "overview": html=viewOverview(); break;
@@ -819,6 +903,7 @@ function render(view,payload){
     default: html=viewOverview();
   }
   viewEl.innerHTML=html;
+  wireCharts();
   window.scrollTo({top:0,behavior:"instant"});
   document.getElementById('side').classList.remove('open');
 }
@@ -845,6 +930,17 @@ document.addEventListener('click',e=>{
   }
 });
 document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('side').classList.toggle('open'));
+
+// generic hover tooltip for any element with [data-tip]
+(function(){
+  const tip=document.createElement('div'); tip.className='hovertip'; document.body.appendChild(tip);
+  document.addEventListener('mousemove',e=>{
+    const t=e.target.closest('[data-tip]');
+    if(!t){ tip.style.opacity=0; return; }
+    tip.innerHTML=t.getAttribute('data-tip');
+    tip.style.left=e.clientX+'px'; tip.style.top=(e.clientY-6)+'px'; tip.style.opacity=1;
+  },{passive:true});
+})();
 
 // ---- sync label + live polling -------------------------------------------
 function relTime(iso){
