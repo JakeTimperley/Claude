@@ -1,5 +1,6 @@
 using Toybox.WatchUi as Ui;
 using Toybox.System;
+using Toybox.Lang;
 
 // Build a numeric pick list (used for reps and rest seconds).
 function buildNumberMenu(title, lo, hi, step) {
@@ -47,7 +48,7 @@ class RepsDelegate extends Ui.Menu2InputDelegate {
     var workout;
     function initialize(w) { Menu2InputDelegate.initialize(); workout = w; }
     function onSelect(item) {
-        workout.reps = item.getId();
+        workout.reps = item.getId() as Lang.Number;
         Ui.popView(Ui.SLIDE_RIGHT);   // close number menu
         Ui.popView(Ui.SLIDE_RIGHT);   // close options menu -> back to live view
     }
@@ -57,7 +58,7 @@ class RestDelegate extends Ui.Menu2InputDelegate {
     var workout;
     function initialize(w) { Menu2InputDelegate.initialize(); workout = w; }
     function onSelect(item) {
-        workout.restMs = item.getId() * 1000;
+        workout.restMs = (item.getId() as Lang.Number) * 1000;
         Ui.popView(Ui.SLIDE_RIGHT);
         Ui.popView(Ui.SLIDE_RIGHT);
     }
@@ -67,7 +68,7 @@ class ExerciseDelegate extends Ui.Menu2InputDelegate {
     var workout;
     function initialize(w) { Menu2InputDelegate.initialize(); workout = w; }
     function onSelect(item) {
-        workout.setExercise(item.getId());
+        workout.setExercise(item.getId() as Lang.Number);
         Ui.popView(Ui.SLIDE_RIGHT);
         Ui.popView(Ui.SLIDE_RIGHT);
     }

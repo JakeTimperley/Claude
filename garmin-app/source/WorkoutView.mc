@@ -23,7 +23,7 @@ class WorkoutView extends Ui.View {
         if (uiTimer != null) { uiTimer.stop(); uiTimer = null; }
     }
 
-    function tick() { Ui.requestUpdate(); }
+    function tick() as Void { Ui.requestUpdate(); }
 
     function onUpdate(dc) {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);

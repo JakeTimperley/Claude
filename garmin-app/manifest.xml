@@ -20,7 +20,7 @@
       <iq:product id="fr265s"/>
     </iq:products>
     <iq:permissions>
-      <iq:uses-permission id="FitContributor"/>
+      <iq:uses-permission id="Fit"/>
     </iq:permissions>
     <iq:languages>
       <iq:language>eng</iq:language>
