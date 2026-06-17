@@ -364,17 +364,21 @@ const rehabPlan = {
    user-defined (Garmin has no concept of your custom programmes), but can be
    overridden too if present.
    ------------------------------------------------------------------------- */
-if (typeof window !== "undefined" && window.GARMIN_DATA) {
-  const g = window.GARMIN_DATA;
-  if (g.profile)        profile        = Object.assign(profile, g.profile);
+let updatedAt = null;
+function applyData(g){
+  if (!g) return false;
+  if (g.profile)        profile        = Object.assign({}, profile, g.profile);
   if (g.racePredictors) racePredictors = g.racePredictors;
   if (g.runs)           runs           = g.runs;
   if (g.oneRepMax)      oneRepMax      = g.oneRepMax;
-  if (g.gymTotals)      gymTotals      = Object.assign(gymTotals, g.gymTotals);
+  if (g.gymTotals)      gymTotals      = Object.assign({}, gymTotals, g.gymTotals);
   if (g.gymSessions)    gymSessions    = g.gymSessions;
   if (Array.isArray(g.liftPlan))  liftPlan.splice(0, liftPlan.length, ...g.liftPlan);
   if (g.rehabPlan)      Object.assign(rehabPlan, g.rehabPlan);
+  if (g.updatedAt)      updatedAt = g.updatedAt;
+  return true;
 }
+applyData(typeof window !== "undefined" ? window.GARMIN_DATA : null);
 
 /* =========================================================================
    ICONS (inline SVG, no external deps)
@@ -842,9 +846,43 @@ document.addEventListener('click',e=>{
 });
 document.getElementById('menuBtn').addEventListener('click',()=>document.getElementById('side').classList.toggle('open'));
 
-// live-ish sync clock
-(function tick(){const el=document.getElementById('syncTime');let m=0;setInterval(()=>{m++;el.textContent=m===1?'1 min ago':m+' min ago';},60000);})();
+// ---- sync label + live polling -------------------------------------------
+function relTime(iso){
+  if(!iso) return "—";
+  const diff=Math.max(0,(Date.now()-new Date(iso).getTime())/1000);
+  if(diff<60) return "just now";
+  if(diff<3600) return Math.floor(diff/60)+" min ago";
+  if(diff<86400) return Math.floor(diff/3600)+"h ago";
+  return Math.floor(diff/86400)+"d ago";
+}
+function updateSyncLabel(){
+  document.getElementById('syncTime').textContent = updatedAt ? relTime(updatedAt) : "just now";
+}
+setInterval(()=>updateSyncLabel(), 30000);
 
+// When served by serve.py, poll /api/data so the page updates itself live.
+// When opened as a plain file, this just no-ops and the static data stays.
+let liveOn=false;
+async function poll(){
+  try{
+    const res=await fetch('api/data',{cache:'no-store'});
+    if(!res.ok) return;
+    const j=await res.json();
+    if(j && j.data && Object.keys(j.data).length){
+      const before=updatedAt;
+      applyData(j.data);
+      if(!liveOn){ liveOn=true; document.getElementById('aviSub').textContent="Live · auto-refresh"; }
+      if(updatedAt!==before){ render(current); }   // re-render only when data actually changed
+      updateSyncLabel(true);
+    }
+  }catch(e){ /* no server (opened as file) — stay on static data */ }
+}
+if(location.protocol.startsWith('http')){
+  poll();                       // initial live pull
+  setInterval(poll, 60000);     // check every minute (server refetches Garmin every ~15)
+}
+
+updateSyncLabel();
 render("overview");
 </script>
 </body>
